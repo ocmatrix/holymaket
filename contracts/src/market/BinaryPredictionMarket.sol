@@ -260,8 +260,6 @@ contract BinaryPredictionMarket is ReentrancyGuard, Pausable, AccessControl {
         R_yes = newRYes;
         R_no = newRNo;
 
-        uint256 y = sharesIn - (newRYes - (R_yes - newRYes)); // reconstructed for event
-
         pairSupply -= sharesIn;
         totalYesSupply -= sharesIn;
         totalNoSupply -= sharesIn;
@@ -288,8 +286,6 @@ contract BinaryPredictionMarket is ReentrancyGuard, Pausable, AccessControl {
         totalUserNoShares -= sharesIn;
         R_yes = newRYes;
         R_no = newRNo;
-
-        uint256 y = sharesIn - (newRNo - (R_no - newRNo)); // reconstructed for event
 
         pairSupply -= sharesIn;
         totalYesSupply -= sharesIn;
