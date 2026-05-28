@@ -3,6 +3,9 @@ pragma solidity ^0.8.28;
 import {Test, stdError} from "forge-std/Test.sol";
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 import {CPMMEngine} from "../src/pricing/CPMMEngine.sol";
+import {MockUSDT} from "../src/tokens/MockUSDT.sol";
+import {MarketFactory} from "../src/market/MarketFactory.sol";
+import {BinaryPredictionMarket} from "../src/market/BinaryPredictionMarket.sol";
 
 contract CPMMEngineSellDomainSpec is Test {
     CPMMEngine internal engine;
@@ -140,6 +143,26 @@ contract CPMMEngineSellDomainSpec is Test {
         assertEq(rYN, rNY);
     }
 
+    function testFuzz_monotonicity_quoteSellYes_collateralOut(uint256 s1, uint256 s2) public {
+        s1 = bound(s1, 1000, 50000);
+        s2 = bound(s2, 1000, 50000);
+        if (s1 > s2) (s1, s2) = (s2, s1);
+
+        (uint256 out1,, , ,) = engine.quoteSellYes(s1, 500000, 500000, 50);
+        (uint256 out2,, , ,) = engine.quoteSellYes(s2, 500000, 500000, 50);
+        assertLe(out1, out2);
+    }
+
+    function testFuzz_monotonicity_quoteSellNo_collateralOut(uint256 s1, uint256 s2) public {
+        s1 = bound(s1, 1000, 50000);
+        s2 = bound(s2, 1000, 50000);
+        if (s1 > s2) (s1, s2) = (s2, s1);
+
+        (uint256 out1,, , ,) = engine.quoteSellNo(s1, 500000, 500000, 50);
+        (uint256 out2,, , ,) = engine.quoteSellNo(s2, 500000, 500000, 50);
+        assertLe(out1, out2);
+    }
+
     //
     // ============================================================
     //  SECTION F — k 不变量（baseline, 当前应全过）
@@ -163,23 +186,31 @@ contract CPMMEngineSellDomainSpec is Test {
     //   [baseline, 在合理输入域内当前应全过]
     // ============================================================
 
-    function testFuzz_closedForm_sellYes(uint256 rYes, uint256 rNo, uint256 s, uint16 feeBps) public {
-        vm.assume(rYes >= 1000 && rNo >= 1000);
-        vm.assume(rYes <= 1e18 && rNo <= 1e18);
-        vm.assume(rYes + rNo < type(uint256).max / 1e18);
-        vm.assume(rYes * 10000 / rNo <= 50000 && rNo * 10000 / rYes <= 50000);
-        vm.assume(s >= 1 && s <= rYes / 10);
-        vm.assume(feeBps <= 500);
+    function testFuzz_closedForm_sellYes(uint256 rYesSeed, uint256 rNoSeed, uint256 sSeed, uint16 feeBpsSeed) public {
+        uint256 rNo = bound(rNoSeed, 1000, 1e18);
+        uint256 rYesMin = Math.max(1000, Math.ceilDiv(rNo, 5));
+        uint256 rYesMax = Math.min(1e18, rNo * 5);
+        uint256 rYes = bound(rYesSeed, rYesMin, rYesMax);
+
+        uint256 sMax = rYes / 10;
+        if (sMax == 0) sMax = 1;
+        uint256 s = bound(sSeed, 1, sMax);
+
+        uint16 feeBps = uint16(bound(uint256(feeBpsSeed), 0, 500));
         _assertSellYesFuzzSpec(s, rYes, rNo, feeBps);
     }
 
-    function testFuzz_closedForm_sellNo(uint256 rYes, uint256 rNo, uint256 s, uint16 feeBps) public {
-        vm.assume(rYes >= 1000 && rNo >= 1000);
-        vm.assume(rYes <= 1e18 && rNo <= 1e18);
-        vm.assume(rYes + rNo < type(uint256).max / 1e18);
-        vm.assume(rYes * 10000 / rNo <= 50000 && rNo * 10000 / rYes <= 50000);
-        vm.assume(s >= 1 && s <= rNo / 10);
-        vm.assume(feeBps <= 500);
+    function testFuzz_closedForm_sellNo(uint256 rYesSeed, uint256 rNoSeed, uint256 sSeed, uint16 feeBpsSeed) public {
+        uint256 rYes = bound(rYesSeed, 1000, 1e18);
+        uint256 rNoMin = Math.max(1000, Math.ceilDiv(rYes, 5));
+        uint256 rNoMax = Math.min(1e18, rYes * 5);
+        uint256 rNo = bound(rNoSeed, rNoMin, rNoMax);
+
+        uint256 sMax = rNo / 10;
+        if (sMax == 0) sMax = 1;
+        uint256 s = bound(sSeed, 1, sMax);
+
+        uint16 feeBps = uint16(bound(uint256(feeBpsSeed), 0, 500));
         _assertSellNoFuzzSpec(s, rYes, rNo, feeBps);
     }
 
@@ -436,5 +467,423 @@ contract CPMMEngineSellDomainSpec is Test {
             selector := mload(add(revertData, 32))
         }
         assertTrue(selector != PANIC_SELECTOR, "panic revert");
+    }
+}
+
+contract CPMMSellExecutionDomainSpec is Test {
+    MockUSDT internal usdt;
+    CPMMEngine internal engine;
+    MarketFactory internal factory;
+    BinaryPredictionMarket internal market;
+
+    address internal creator = address(this);
+    address internal user = address(0xBEEF);
+    address internal resolver = address(0xA11CE);
+    address internal treasury = address(0x7E57);
+    address internal feeRouter = address(0xFEE);
+
+    function setUp() public {
+        usdt = new MockUSDT();
+        engine = new CPMMEngine();
+
+        factory = new MarketFactory(
+            500,
+            1000,
+            1000,
+            1_000_000,
+            3000,
+            7000,
+            resolver,
+            feeRouter,
+            treasury
+        );
+        factory.setCollateralAllowed(address(usdt), true);
+
+        usdt.mint(creator, 100_000_000_000);
+        usdt.mint(user, 100_000_000_000);
+    }
+
+    function _createMarket(uint16 feeBps) internal returns (BinaryPredictionMarket m) {
+        MarketFactory.CreateMarketParams memory p = MarketFactory.CreateMarketParams({
+            question: "BTC>100k?",
+            metadataURI: "ipfs://rule",
+            collateral: address(usdt),
+            startTime: uint64(block.timestamp),
+            endTime: uint64(block.timestamp + 7 days),
+            initialCollateral: 1_000_000,
+            initialPriceYesBps: 5000,
+            minTradeAmount: 1,
+            maxTradeAmount: 100_000,
+            maxSlippageBps: 500,
+            feeBps: feeBps
+        });
+
+        usdt.approve(address(factory), p.initialCollateral);
+        (, address marketAddress) = factory.createMarket(p);
+        m = BinaryPredictionMarket(marketAddress);
+
+        vm.prank(address(factory));
+        m.setAmmEngine(address(engine));
+    }
+
+    function _fundMarketExtra(BinaryPredictionMarket m, uint256 amount) internal {
+        usdt.mint(creator, amount);
+        usdt.transfer(address(m), amount);
+    }
+
+    function test_quoteSell_reverts_on_zero_input_current_behavior() public {
+        market = _createMarket(50);
+
+        vm.expectRevert("zero input");
+        market.quoteSellYes(0);
+
+        vm.expectRevert("zero input");
+        market.quoteSellNo(0);
+    }
+
+    function test_sell_reverts_on_zero_sharesIn_current_behavior() public {
+        market = _createMarket(50);
+
+        vm.startPrank(user);
+        usdt.approve(address(market), type(uint256).max);
+        vm.expectRevert("trade size");
+        market.sellYes(0, 0);
+        vm.expectRevert("trade size");
+        market.sellNo(0, 0);
+        vm.stopPrank();
+    }
+
+    function test_sellYes_exec_matches_quote_and_fee_accounting() public {
+        market = _createMarket(50);
+        _fundMarketExtra(market, 1_000_000);
+
+        uint256 collateralIn = 80_000;
+        (uint256 buySharesOut,,) = market.quoteBuyYes(collateralIn);
+
+        vm.startPrank(user);
+        usdt.approve(address(market), type(uint256).max);
+        market.buyYes(collateralIn, buySharesOut);
+        vm.stopPrank();
+
+        uint256 sharesIn = buySharesOut / 3;
+        (uint256 quoteCollateralOut, uint256 quoteFee,) = market.quoteSellYes(sharesIn);
+
+        uint256 userBefore = usdt.balanceOf(user);
+        uint256 marketBefore = usdt.balanceOf(address(market));
+        uint256 treasuryBefore = usdt.balanceOf(treasury);
+        uint256 feesBefore = market.totalFeesCollected();
+
+        vm.prank(user);
+        market.sellYes(sharesIn, quoteCollateralOut);
+
+        uint256 userReceived = usdt.balanceOf(user) - userBefore;
+        uint256 marketDecrease = marketBefore - usdt.balanceOf(address(market));
+        uint256 treasuryIncrease = usdt.balanceOf(treasury) - treasuryBefore;
+
+        assertEq(userReceived, quoteCollateralOut);
+        assertEq(treasuryIncrease, quoteFee);
+        assertEq(marketDecrease, quoteCollateralOut + quoteFee);
+        assertEq(market.totalFeesCollected() - feesBefore, quoteFee);
+    }
+
+    function test_sellNo_exec_matches_quote_and_fee_accounting() public {
+        market = _createMarket(50);
+        _fundMarketExtra(market, 1_000_000);
+
+        uint256 collateralIn = 80_000;
+        (uint256 buySharesOut,,) = market.quoteBuyNo(collateralIn);
+
+        vm.startPrank(user);
+        usdt.approve(address(market), type(uint256).max);
+        market.buyNo(collateralIn, buySharesOut);
+        vm.stopPrank();
+
+        uint256 sharesIn = buySharesOut / 3;
+        (uint256 quoteCollateralOut, uint256 quoteFee,) = market.quoteSellNo(sharesIn);
+
+        uint256 userBefore = usdt.balanceOf(user);
+        uint256 marketBefore = usdt.balanceOf(address(market));
+        uint256 treasuryBefore = usdt.balanceOf(treasury);
+        uint256 feesBefore = market.totalFeesCollected();
+
+        vm.prank(user);
+        market.sellNo(sharesIn, quoteCollateralOut);
+
+        uint256 userReceived = usdt.balanceOf(user) - userBefore;
+        uint256 marketDecrease = marketBefore - usdt.balanceOf(address(market));
+        uint256 treasuryIncrease = usdt.balanceOf(treasury) - treasuryBefore;
+
+        assertEq(userReceived, quoteCollateralOut);
+        assertEq(treasuryIncrease, quoteFee);
+        assertEq(marketDecrease, quoteCollateralOut + quoteFee);
+        assertEq(market.totalFeesCollected() - feesBefore, quoteFee);
+    }
+
+    function test_sell_reverts_when_sharesIn_exceeds_user_balance_current_behavior() public {
+        market = _createMarket(50);
+        _fundMarketExtra(market, 1_000_000);
+
+        uint256 collateralIn = 10_000;
+        (uint256 buySharesOut,,) = market.quoteBuyYes(collateralIn);
+
+        vm.startPrank(user);
+        usdt.approve(address(market), type(uint256).max);
+        market.buyYes(collateralIn, buySharesOut);
+        vm.expectRevert("insufficient shares");
+        market.sellYes(buySharesOut + 1, 0);
+        vm.stopPrank();
+    }
+
+    function test_sell_reverts_when_sharesIn_exceeds_engine_reserve_current_behavior() public {
+        market = _createMarket(50);
+        _fundMarketExtra(market, 1_000_000);
+
+        uint256 collateralIn = 100_000;
+        (uint256 buySharesOut,,) = market.quoteBuyYes(collateralIn);
+
+        vm.startPrank(user);
+        usdt.approve(address(market), type(uint256).max);
+        market.buyYes(collateralIn, buySharesOut);
+        vm.stopPrank();
+
+        uint256 rYes = market.R_yes();
+        uint256 userYes = market.yesShares(user);
+
+        if (rYes + 1 > userYes) return;
+        if (rYes + 1 > market.maxTradeAmount()) return;
+
+        vm.prank(user);
+        vm.expectRevert("shares exceeds reserve");
+        market.sellYes(rYes + 1, 0);
+    }
+
+    function test_sequential_sellYes_updates_balances_and_fee_accumulates() public {
+        market = _createMarket(50);
+        _fundMarketExtra(market, 1_000_000);
+
+        uint256 collateralIn = 90_000;
+        (uint256 buySharesOut,,) = market.quoteBuyYes(collateralIn);
+
+        vm.startPrank(user);
+        usdt.approve(address(market), type(uint256).max);
+        market.buyYes(collateralIn, buySharesOut);
+        vm.stopPrank();
+
+        uint256 feesBefore = market.totalFeesCollected();
+
+        for (uint256 i = 0; i < 3; i++) {
+            uint256 remaining = market.yesShares(user);
+            if (remaining <= 1) break;
+            uint256 sharesIn = remaining / 4;
+            if (sharesIn == 0) sharesIn = 1;
+            (uint256 quoteCollateralOut, uint256 quoteFee,) = market.quoteSellYes(sharesIn);
+
+            uint256 userBefore = usdt.balanceOf(user);
+            uint256 marketBefore = usdt.balanceOf(address(market));
+            uint256 treasuryBefore = usdt.balanceOf(treasury);
+            uint256 feesStepBefore = market.totalFeesCollected();
+
+            vm.prank(user);
+            market.sellYes(sharesIn, quoteCollateralOut);
+
+            uint256 userReceived = usdt.balanceOf(user) - userBefore;
+            uint256 marketDecrease = marketBefore - usdt.balanceOf(address(market));
+            uint256 treasuryIncrease = usdt.balanceOf(treasury) - treasuryBefore;
+
+            assertEq(userReceived, quoteCollateralOut);
+            assertEq(treasuryIncrease, quoteFee);
+            assertEq(marketDecrease, quoteCollateralOut + quoteFee);
+            assertEq(market.totalFeesCollected() - feesStepBefore, quoteFee);
+        }
+
+        assertGe(market.totalFeesCollected(), feesBefore);
+    }
+
+    function test_sequential_sellNo_updates_balances_and_fee_accumulates() public {
+        market = _createMarket(50);
+        _fundMarketExtra(market, 1_000_000);
+
+        uint256 collateralIn = 90_000;
+        (uint256 buySharesOut,,) = market.quoteBuyNo(collateralIn);
+
+        vm.startPrank(user);
+        usdt.approve(address(market), type(uint256).max);
+        market.buyNo(collateralIn, buySharesOut);
+        vm.stopPrank();
+
+        uint256 feesBefore = market.totalFeesCollected();
+
+        for (uint256 i = 0; i < 3; i++) {
+            uint256 remaining = market.noShares(user);
+            if (remaining <= 1) break;
+            uint256 sharesIn = remaining / 4;
+            if (sharesIn == 0) sharesIn = 1;
+            (uint256 quoteCollateralOut, uint256 quoteFee,) = market.quoteSellNo(sharesIn);
+
+            uint256 userBefore = usdt.balanceOf(user);
+            uint256 marketBefore = usdt.balanceOf(address(market));
+            uint256 treasuryBefore = usdt.balanceOf(treasury);
+            uint256 feesStepBefore = market.totalFeesCollected();
+
+            vm.prank(user);
+            market.sellNo(sharesIn, quoteCollateralOut);
+
+            uint256 userReceived = usdt.balanceOf(user) - userBefore;
+            uint256 marketDecrease = marketBefore - usdt.balanceOf(address(market));
+            uint256 treasuryIncrease = usdt.balanceOf(treasury) - treasuryBefore;
+
+            assertEq(userReceived, quoteCollateralOut);
+            assertEq(treasuryIncrease, quoteFee);
+            assertEq(marketDecrease, quoteCollateralOut + quoteFee);
+            assertEq(market.totalFeesCollected() - feesStepBefore, quoteFee);
+        }
+
+        assertGe(market.totalFeesCollected(), feesBefore);
+    }
+
+    function test_sell_feeBps_zero_has_zero_fee_and_no_totalFeesCollected_growth() public {
+        market = _createMarket(0);
+        _fundMarketExtra(market, 1_000_000);
+
+        uint256 collateralIn = 80_000;
+        (uint256 buySharesOut,,) = market.quoteBuyYes(collateralIn);
+
+        vm.startPrank(user);
+        usdt.approve(address(market), type(uint256).max);
+        market.buyYes(collateralIn, buySharesOut);
+        vm.stopPrank();
+
+        uint256 sharesIn = buySharesOut / 3;
+        (uint256 quoteCollateralOut, uint256 quoteFee,) = market.quoteSellYes(sharesIn);
+        assertEq(quoteFee, 0);
+
+        uint256 treasuryBefore = usdt.balanceOf(treasury);
+        uint256 feesBefore = market.totalFeesCollected();
+        uint256 marketBefore = usdt.balanceOf(address(market));
+        uint256 userBefore = usdt.balanceOf(user);
+
+        vm.prank(user);
+        market.sellYes(sharesIn, quoteCollateralOut);
+
+        uint256 userReceived = usdt.balanceOf(user) - userBefore;
+        uint256 marketDecrease = marketBefore - usdt.balanceOf(address(market));
+        uint256 treasuryIncrease = usdt.balanceOf(treasury) - treasuryBefore;
+
+        assertEq(userReceived, quoteCollateralOut);
+        assertEq(treasuryIncrease, 0);
+        assertEq(marketDecrease, quoteCollateralOut);
+        assertEq(market.totalFeesCollected(), feesBefore);
+    }
+
+    function test_sell_feeBps_max_routes_fee_and_updates_totalFeesCollected() public {
+        uint16 maxFeeBps = factory.systemMaxFeeBps();
+        market = _createMarket(maxFeeBps);
+        _fundMarketExtra(market, 1_000_000);
+
+        uint256 collateralIn = 80_000;
+        (uint256 buySharesOut,,) = market.quoteBuyYes(collateralIn);
+
+        vm.startPrank(user);
+        usdt.approve(address(market), type(uint256).max);
+        market.buyYes(collateralIn, buySharesOut);
+        vm.stopPrank();
+
+        uint256 sharesIn = buySharesOut / 3;
+        (uint256 quoteCollateralOut, uint256 quoteFee,) = market.quoteSellYes(sharesIn);
+
+        uint256 treasuryBefore = usdt.balanceOf(treasury);
+        uint256 feesBefore = market.totalFeesCollected();
+
+        vm.prank(user);
+        market.sellYes(sharesIn, quoteCollateralOut);
+
+        assertEq(usdt.balanceOf(treasury) - treasuryBefore, quoteFee);
+        assertEq(market.totalFeesCollected() - feesBefore, quoteFee);
+    }
+
+    function testFuzz_sellYes_quote_matches_execution_and_accounting(uint256 buyIn, uint256 sharesIn) public {
+        market = _createMarket(50);
+        _fundMarketExtra(market, 1_000_000);
+
+        buyIn = bound(buyIn, 1, 100_000);
+        (uint256 buySharesOut,,) = market.quoteBuyYes(buyIn);
+
+        vm.startPrank(user);
+        usdt.approve(address(market), type(uint256).max);
+        market.buyYes(buyIn, buySharesOut);
+        vm.stopPrank();
+
+        uint256 userYes = market.yesShares(user);
+        uint256 rYes = market.R_yes();
+        uint256 maxSharesIn = userYes < rYes ? userYes : rYes;
+        if (maxSharesIn == 0) return;
+
+        sharesIn = bound(sharesIn, 1, maxSharesIn);
+        if (sharesIn > market.maxTradeAmount()) {
+            sharesIn = market.maxTradeAmount();
+        }
+        if (sharesIn == 0) return;
+
+        (uint256 quoteCollateralOut, uint256 quoteFee,) = market.quoteSellYes(sharesIn);
+
+        uint256 userBefore = usdt.balanceOf(user);
+        uint256 marketBefore = usdt.balanceOf(address(market));
+        uint256 treasuryBefore = usdt.balanceOf(treasury);
+        uint256 feesBefore = market.totalFeesCollected();
+
+        vm.prank(user);
+        market.sellYes(sharesIn, quoteCollateralOut);
+
+        uint256 userReceived = usdt.balanceOf(user) - userBefore;
+        uint256 marketDecrease = marketBefore - usdt.balanceOf(address(market));
+        uint256 treasuryIncrease = usdt.balanceOf(treasury) - treasuryBefore;
+
+        assertEq(userReceived, quoteCollateralOut);
+        assertEq(treasuryIncrease, quoteFee);
+        assertEq(marketDecrease, quoteCollateralOut + quoteFee);
+        assertEq(market.totalFeesCollected() - feesBefore, quoteFee);
+    }
+
+    function testFuzz_sellNo_quote_matches_execution_and_accounting(uint256 buyIn, uint256 sharesIn) public {
+        market = _createMarket(50);
+        _fundMarketExtra(market, 1_000_000);
+
+        buyIn = bound(buyIn, 1, 100_000);
+        (uint256 buySharesOut,,) = market.quoteBuyNo(buyIn);
+
+        vm.startPrank(user);
+        usdt.approve(address(market), type(uint256).max);
+        market.buyNo(buyIn, buySharesOut);
+        vm.stopPrank();
+
+        uint256 userNo = market.noShares(user);
+        uint256 rNo = market.R_no();
+        uint256 maxSharesIn = userNo < rNo ? userNo : rNo;
+        if (maxSharesIn == 0) return;
+
+        sharesIn = bound(sharesIn, 1, maxSharesIn);
+        if (sharesIn > market.maxTradeAmount()) {
+            sharesIn = market.maxTradeAmount();
+        }
+        if (sharesIn == 0) return;
+
+        (uint256 quoteCollateralOut, uint256 quoteFee,) = market.quoteSellNo(sharesIn);
+
+        uint256 userBefore = usdt.balanceOf(user);
+        uint256 marketBefore = usdt.balanceOf(address(market));
+        uint256 treasuryBefore = usdt.balanceOf(treasury);
+        uint256 feesBefore = market.totalFeesCollected();
+
+        vm.prank(user);
+        market.sellNo(sharesIn, quoteCollateralOut);
+
+        uint256 userReceived = usdt.balanceOf(user) - userBefore;
+        uint256 marketDecrease = marketBefore - usdt.balanceOf(address(market));
+        uint256 treasuryIncrease = usdt.balanceOf(treasury) - treasuryBefore;
+
+        assertEq(userReceived, quoteCollateralOut);
+        assertEq(treasuryIncrease, quoteFee);
+        assertEq(marketDecrease, quoteCollateralOut + quoteFee);
+        assertEq(market.totalFeesCollected() - feesBefore, quoteFee);
     }
 }
