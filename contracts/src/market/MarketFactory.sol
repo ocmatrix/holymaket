@@ -90,6 +90,7 @@ contract MarketFactory is AccessControl {
         onlyRole(MARKET_CREATOR_ROLE)
         returns (uint256 marketId, address marketAddress)
     {
+        require(bytes(p.question).length > 0, "empty question");
         require(p.collateral != address(0), ZeroCollateralAddress());
         require(p.initialCollateral > 0, ZeroInitialCollateral());
         require(collateralAllowed[p.collateral], CollateralNotWhitelisted(p.collateral));
@@ -101,6 +102,7 @@ contract MarketFactory is AccessControl {
         require(p.maxSlippageBps <= systemMaxSlippageBps, "slippage exceeds max");
         require(p.maxTradeAmount <= p.initialCollateral * tradeCapBps / 10000,
             TradeLimitExceeded(p.maxTradeAmount, p.initialCollateral));
+        require(p.startTime > 0, "startTime zero");
         require(p.startTime < p.endTime, "invalid time range");
 
         BinaryPredictionMarket newMarket = new BinaryPredictionMarket(
