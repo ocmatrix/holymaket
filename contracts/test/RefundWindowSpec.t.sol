@@ -52,6 +52,9 @@ contract RefundWindowSpec is Test {
             feeBps: 50
         });
 
+        usdt.mint(address(this), 1_000_000);
+        usdt.approve(address(factory), 1_000_000);
+
         (, address marketAddress) = factory.createMarket(p);
         BinaryPredictionMarket m = BinaryPredictionMarket(marketAddress);
         vm.prank(address(factory));

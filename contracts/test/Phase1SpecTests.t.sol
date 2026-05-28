@@ -55,6 +55,9 @@ contract Phase1SpecTests is Test {
             feeBps: 50
         });
 
+        usdt.mint(creator, initialCollateral);
+        usdt.approve(address(factory), initialCollateral);
+
         (, address marketAddress) = factory.createMarket(p);
         BinaryPredictionMarket m = BinaryPredictionMarket(marketAddress);
 
@@ -76,16 +79,16 @@ contract Phase1SpecTests is Test {
         assertGe(usdt.balanceOf(address(m)), m.collateralLocked());
     }
 
-    function test_createMarket_initialCollateralNotTransferred_specViolation() public {
+    function test_createMarket_initialCollateralTransferred_andBacked() public {
         market = _createMarket(1_000_000, 5000);
-        assertEq(usdt.balanceOf(address(market)), 0);
+        assertEq(usdt.balanceOf(address(market)), 1_000_000);
         assertEq(market.collateralLocked(), 1_000_000);
-        assertLt(usdt.balanceOf(address(market)), market.collateralLocked());
+        assertEq(usdt.balanceOf(address(market)), market.collateralLocked());
     }
 
-    function test_invariants_I6_fail_after_createMarket() public {
+    function test_invariants_I6_hold_after_createMarket() public {
         market = _createMarket(1_000_000, 5000);
-        assertTrue(usdt.balanceOf(address(market)) < market.collateralLocked());
+        assertGe(usdt.balanceOf(address(market)), market.collateralLocked());
     }
 
     function test_buyYes_quote_execute_consistency() public {
@@ -103,7 +106,7 @@ contract Phase1SpecTests is Test {
         assertEq(market.totalUserYesShares(), quoteSharesOut);
         assertEq(market.totalFeesCollected(), quoteFee);
         assertEq(usdt.balanceOf(treasury), quoteFee);
-        assertEq(usdt.balanceOf(address(market)), collateralIn - quoteFee);
+        assertEq(usdt.balanceOf(address(market)), 1_000_000 + collateralIn - quoteFee);
     }
 
     function test_buyNo_quote_execute_consistency() public {
@@ -121,7 +124,7 @@ contract Phase1SpecTests is Test {
         assertEq(market.totalUserNoShares(), quoteSharesOut);
         assertEq(market.totalFeesCollected(), quoteFee);
         assertEq(usdt.balanceOf(treasury), quoteFee);
-        assertEq(usdt.balanceOf(address(market)), collateralIn - quoteFee);
+        assertEq(usdt.balanceOf(address(market)), 1_000_000 + collateralIn - quoteFee);
     }
 
     function test_sellYes_reverts_underflow_current_bug() public {

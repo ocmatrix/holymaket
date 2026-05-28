@@ -2,9 +2,12 @@
 pragma solidity ^0.8.28;
 
 import {AccessControl} from "@openzeppelin/contracts/access/AccessControl.sol";
+import {SafeERC20, IERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {BinaryPredictionMarket} from "./BinaryPredictionMarket.sol";
 
 contract MarketFactory is AccessControl {
+    using SafeERC20 for IERC20;
+
     bytes32 public constant MARKET_CREATOR_ROLE = keccak256("MARKET_CREATOR_ROLE");
     bytes32 public constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
 
@@ -54,6 +57,8 @@ contract MarketFactory is AccessControl {
     error CollateralNotWhitelisted(address collateral);
     error InvalidFeeBps(uint16 provided, uint16 max);
     error TradeLimitExceeded(uint256 maxTrade, uint256 poolLiquidity);
+    error ZeroInitialCollateral();
+    error ZeroCollateralAddress();
 
     constructor(
         uint16 _systemMaxFeeBps,
@@ -85,6 +90,8 @@ contract MarketFactory is AccessControl {
         onlyRole(MARKET_CREATOR_ROLE)
         returns (uint256 marketId, address marketAddress)
     {
+        require(p.collateral != address(0), ZeroCollateralAddress());
+        require(p.initialCollateral > 0, ZeroInitialCollateral());
         require(collateralAllowed[p.collateral], CollateralNotWhitelisted(p.collateral));
         require(p.initialPriceYesBps >= minInitialPriceYesBps && p.initialPriceYesBps <= maxInitialPriceYesBps,
             InvalidPriceBps(p.initialPriceYesBps, minInitialPriceYesBps, maxInitialPriceYesBps));
@@ -112,6 +119,11 @@ contract MarketFactory is AccessControl {
             feeRouter,
             treasury
         );
+
+        IERC20 collateralToken = IERC20(p.collateral);
+        collateralToken.safeTransferFrom(msg.sender, address(this), p.initialCollateral);
+        collateralToken.safeTransfer(address(newMarket), p.initialCollateral);
+        newMarket.initializeLiquidity(p.initialCollateral, p.initialPriceYesBps);
 
         marketId = nextMarketId;
         markets[marketId] = address(newMarket);
