@@ -85,8 +85,8 @@ contract BinaryPredictionMarket is ReentrancyGuard, Pausable, AccessControl {
         address _collateral,
         uint64 _startTime,
         uint64 _endTime,
-        uint256 _initialCollateral,
-        uint16 _initialPriceYesBps,
+        uint256,
+        uint16,
         uint256 _minTradeAmount,
         uint256 _maxTradeAmount,
         uint16 _maxSlippageBps,
@@ -98,6 +98,8 @@ contract BinaryPredictionMarket is ReentrancyGuard, Pausable, AccessControl {
         _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
         _grantRole(RESOLVER_ROLE, _resolver);
         _grantRole(ADMIN_ROLE, msg.sender);
+
+        require(_collateral != address(0), "collateral zero");
 
         question = _question;
         metadataURI = _metadataURI;
@@ -111,11 +113,14 @@ contract BinaryPredictionMarket is ReentrancyGuard, Pausable, AccessControl {
         resolver = _resolver;
         feeRouter = _feeRouter;
         treasury = _treasury;
-
-        _initializeLiquidity(_initialCollateral, _initialPriceYesBps);
+        status = MarketStatus.Paused;
     }
 
-    function _initializeLiquidity(uint256 _initialCollateral, uint16 _initialPriceYesBps) internal {
+    function initializeLiquidity(uint256 _initialCollateral, uint16 _initialPriceYesBps) external onlyRole(ADMIN_ROLE) {
+        require(collateralLocked == 0 && pairSupply == 0, "already initialized");
+        require(_initialCollateral > 0, "zero liquidity");
+        require(collateral.balanceOf(address(this)) >= _initialCollateral, "initial collateral missing");
+
         uint256 p = uint256(_initialPriceYesBps) * 1e18 / 10000;
         R_no = _initialCollateral * p / 1e18;
         R_yes = _initialCollateral - R_no;
