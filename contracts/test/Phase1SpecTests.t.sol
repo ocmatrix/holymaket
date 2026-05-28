@@ -1,7 +1,6 @@
 pragma solidity ^0.8.28;
 
 import {Test} from "forge-std/Test.sol";
-import {stdError} from "forge-std/StdError.sol";
 
 import {MockUSDT} from "../src/tokens/MockUSDT.sol";
 import {CPMMEngine} from "../src/pricing/CPMMEngine.sol";
@@ -127,7 +126,7 @@ contract Phase1SpecTests is Test {
         assertEq(usdt.balanceOf(address(market)), 1_000_000 + collateralIn - quoteFee);
     }
 
-    function test_sellYes_reverts_underflow_current_bug() public {
+    function test_sellYes_quote_execute_consistency() public {
         market = _createMarket(1_000_000, 5000);
 
         usdt.mint(creator, 1_000_000);
@@ -140,26 +139,18 @@ contract Phase1SpecTests is Test {
         market.buyYes(collateralIn, buySharesOut);
         vm.stopPrank();
 
-        uint256 rYesBefore = market.R_yes();
-        uint256 rNoBefore = market.R_no();
-        uint256 pairSupplyBefore = market.pairSupply();
-        uint256 collateralLockedBefore = market.collateralLocked();
-
         uint256 sharesIn = buySharesOut / 3;
         (uint256 quoteCollateralOut, uint256 quoteSellFee,) = market.quoteSellYes(sharesIn);
+        uint256 treasuryBalanceBefore = usdt.balanceOf(treasury);
+        uint256 userBalanceBefore = usdt.balanceOf(user);
 
         vm.prank(user);
-        vm.expectRevert(stdError.arithmeticError);
         market.sellYes(sharesIn, quoteCollateralOut);
 
-        uint256 a = rYesBefore + rNoBefore - sharesIn;
-        uint256 discriminant = a * a + 4 * sharesIn * rYesBefore;
-        uint256 x = (sqrt(discriminant) - a) / 2;
-        uint256 y = sharesIn - x;
-
-        assertTrue(sharesIn > y);
-        assertEq(usdt.balanceOf(treasury), buyFee);
-        assertEq(quoteSellFee > 0, true);
+        assertEq(market.yesShares(user), buySharesOut - sharesIn);
+        assertEq(usdt.balanceOf(treasury) - treasuryBalanceBefore, quoteSellFee);
+        assertEq(usdt.balanceOf(treasury), buyFee + quoteSellFee);
+        assertEq(usdt.balanceOf(user) - userBalanceBefore, quoteCollateralOut);
     }
 
     function test_cancel_refund_half_shares_floor() public {
@@ -226,7 +217,7 @@ contract Phase1SpecTests is Test {
         assertTrue(market.claimedFinalPayout(user));
     }
 
-    function test_sellYes_reverts_before_invariant_checks_current_bug() public {
+    function test_sellYes_updates_key_accounting_after_execution() public {
         market = _createMarket(1_000_000, 5000);
 
         usdt.mint(creator, 1_000_000);
@@ -241,9 +232,18 @@ contract Phase1SpecTests is Test {
 
         uint256 sharesIn = buySharesOut / 4;
         (uint256 quoteCollateralOut,,) = market.quoteSellYes(sharesIn);
+        uint256 pairSupplyBefore = market.pairSupply();
+        uint256 collateralLockedBefore = market.collateralLocked();
+        uint256 totalYesSupplyBefore = market.totalYesSupply();
+        uint256 totalNoSupplyBefore = market.totalNoSupply();
         vm.prank(user);
-        vm.expectRevert(stdError.arithmeticError);
         market.sellYes(sharesIn, quoteCollateralOut);
+
+        assertEq(market.pairSupply(), pairSupplyBefore - sharesIn);
+        assertEq(market.collateralLocked(), collateralLockedBefore - sharesIn);
+        assertEq(market.totalYesSupply(), totalYesSupplyBefore - sharesIn);
+        assertEq(market.totalNoSupply(), totalNoSupplyBefore - sharesIn);
+        _assertI6Solvency(market);
     }
 
     function test_invariants_I1_I5_hold_after_manual_backing_and_buy() public {
@@ -261,16 +261,5 @@ contract Phase1SpecTests is Test {
 
         _assertI1I5(market);
         _assertI6Solvency(market);
-    }
-
-    function sqrt(uint256 x) internal pure returns (uint256) {
-        if (x == 0) return 0;
-        uint256 z = (x + 1) / 2;
-        uint256 y = x;
-        while (z < y) {
-            y = z;
-            z = (x / z + z) / 2;
-        }
-        return y;
     }
 }
