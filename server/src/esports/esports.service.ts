@@ -1,0 +1,513 @@
+import { BadRequestException, Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { Cron, CronExpression } from '@nestjs/schedule';
+import { PrismaService } from '../prisma.service';
+import { RiotService } from './providers/riot.service';
+import { OpenDotaService } from './providers/opendota.service';
+import { CS2SimulatorService } from './providers/cs2-simulator.service';
+import { PandaScoreService } from './providers/pandascore.service';
+import { SportDevsService } from './providers/sportdevs.service';
+import { EventsGateway } from '../events/events.gateway';
+export interface EsportsMatchDto {
+    id: string;
+    game: string;
+    league: string;
+    tournament?: string;
+    homeTeam: {
+        id: string;
+        name: string;
+        shortName?: string;
+        logo?: string;
+    };
+    awayTeam: {
+        id: string;
+        name: string;
+        shortName?: string;
+        logo?: string;
+    };
+    bestOf: number;
+    scheduledAt: Date;
+    status: 'UPCOMING' | 'LIVE' | 'FINISHED' | 'CANCELLED' | 'POSTPONED';
+    homeScore: number;
+    awayScore: number;
+    homeOdds?: number;
+    awayOdds?: number;
+    streamUrl?: string;
+}
+@Injectable()
+export class EsportsService implements OnModuleInit {
+    private readonly logger = new Logger(EsportsService.name);
+    constructor(private prisma: PrismaService, private riotService: RiotService, private openDotaService: OpenDotaService, private cs2Simulator: CS2SimulatorService, private pandaScoreService: PandaScoreService, private sportDevsService: SportDevsService, private eventsGateway: EventsGateway) { }
+    async onModuleInit() {
+        this.logger.log('Esports Service initializing...');
+        await this.cleanupStaleMatchesOnInit();
+        await this.syncAllMatches();
+    }
+    private async cleanupStaleMatchesOnInit() {
+        try {
+            const now = new Date();
+            const threeHoursAgo = new Date(now.getTime() - 3 * 60 * 60 * 1000);
+            const staleLive = await this.prisma.esportsMatch.updateMany({
+                where: {
+                    status: 'LIVE',
+                    scheduledAt: { lte: threeHoursAgo },
+                },
+                data: { status: 'FINISHED' },
+            });
+            const twelveHoursAgo = new Date(now.getTime() - 12 * 60 * 60 * 1000);
+            const staleUpcoming = await this.prisma.esportsMatch.updateMany({
+                where: {
+                    status: 'UPCOMING',
+                    scheduledAt: { lte: twelveHoursAgo },
+                },
+                data: { status: 'CANCELLED' },
+            });
+            this.logger.log(`🧹 Init cleanup: Finished ${staleLive.count} stale LIVE, Cancelled ${staleUpcoming.count} stale UPCOMING matches`);
+        }
+        catch (error) {
+            this.logger.error('Failed to cleanup stale matches on init', error);
+        }
+    }
+    @Cron(CronExpression.EVERY_5_MINUTES)
+    async syncAllMatches() {
+        this.logger.log('Syncing esports matches...');
+        let syncedCount = 0;
+        try {
+            const sportDevsMatches = await this.sportDevsService.getLiveAndUpcomingMatches(50);
+            if (sportDevsMatches.length > 0) {
+                await this.upsertMatches(sportDevsMatches, 'sportdevs');
+                syncedCount += sportDevsMatches.length;
+                this.logger.log(`Synced ${sportDevsMatches.length} matches from SportDevs`);
+            }
+        }
+        catch (error) {
+            this.logger.warn('SportDevs sync failed (API key may not be configured)');
+        }
+        try {
+            await this.syncFromPandaScore();
+        }
+        catch (error) {
+            this.logger.warn('PandaScore sync failed (API may be unavailable)');
+        }
+        try {
+            await Promise.all([
+                this.syncLOLMatches(),
+                this.syncDOTA2Matches(),
+                this.syncCS2Matches(),
+            ]);
+            this.logger.log('Synced matches from free APIs (LoL Esports, OpenDota, CS2)');
+        }
+        catch (error) {
+            this.logger.error('Failed to sync from alternative sources', error);
+        }
+        const totalMatches = await this.prisma.esportsMatch.count({
+            where: { status: { in: ['UPCOMING', 'LIVE'] } },
+        });
+        if (totalMatches === 0) {
+            this.logger.warn('⚠️ No esports matches available - all APIs may be down');
+        }
+        else {
+            this.logger.log(`✅ Esports sync complete: ${totalMatches} active matches`);
+        }
+    }
+    @Cron('0 */2 * * * *')
+    async cleanupStaleMatches() {
+        try {
+            const now = new Date();
+            const threeHoursAgo = new Date(now.getTime() - 3 * 60 * 60 * 1000);
+            const staleLiveMatches = await this.prisma.esportsMatch.updateMany({
+                where: {
+                    status: 'LIVE',
+                    scheduledAt: {
+                        lte: threeHoursAgo,
+                    },
+                },
+                data: {
+                    status: 'FINISHED',
+                },
+            });
+            if (staleLiveMatches.count > 0) {
+                this.logger.log(`⏹️ Auto-finished ${staleLiveMatches.count} stale LIVE matches (>3h)`);
+            }
+            const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+            const staleUpcomingMatches = await this.prisma.esportsMatch.updateMany({
+                where: {
+                    status: 'UPCOMING',
+                    scheduledAt: {
+                        lte: oneDayAgo,
+                    },
+                },
+                data: {
+                    status: 'CANCELLED',
+                },
+            });
+            if (staleUpcomingMatches.count > 0) {
+                this.logger.log(`🚫 Auto-cancelled ${staleUpcomingMatches.count} stale UPCOMING matches (>24h)`);
+            }
+        }
+        catch (error) {
+            this.logger.error('Failed to cleanup stale matches', error);
+        }
+    }
+    async syncFromPandaScore() {
+        try {
+            const data = await this.pandaScoreService.getAllUpcomingAndRunningMatches();
+            for (const match of data.all) {
+                if (match) {
+                    await this.upsertMatchFromPandaScore(match);
+                }
+            }
+            this.logger.log(`Synced ${data.all.length} matches from PandaScore (LOL: ${data.lol.length}, DOTA2: ${data.dota2.length}, CS2: ${data.cs2.length})`);
+        }
+        catch (error) {
+            this.logger.error('Failed to sync from PandaScore', error);
+            throw error;
+        }
+    }
+    private async upsertMatchFromPandaScore(match: NonNullable<ReturnType<typeof this.pandaScoreService.transformMatch>>) {
+        try {
+            const homeTeam = await this.prisma.esportsTeam.upsert({
+                where: { externalId: match.homeTeam.id },
+                create: {
+                    externalId: match.homeTeam.id,
+                    name: match.homeTeam.name,
+                    shortName: match.homeTeam.shortName,
+                    logo: match.homeTeam.logo,
+                    game: match.game,
+                },
+                update: {
+                    name: match.homeTeam.name,
+                    shortName: match.homeTeam.shortName,
+                    logo: match.homeTeam.logo,
+                },
+            });
+            const awayTeam = await this.prisma.esportsTeam.upsert({
+                where: { externalId: match.awayTeam.id },
+                create: {
+                    externalId: match.awayTeam.id,
+                    name: match.awayTeam.name,
+                    shortName: match.awayTeam.shortName,
+                    logo: match.awayTeam.logo,
+                    game: match.game,
+                },
+                update: {
+                    name: match.awayTeam.name,
+                    shortName: match.awayTeam.shortName,
+                    logo: match.awayTeam.logo,
+                },
+            });
+            const existing = await this.prisma.esportsMatch.findUnique({
+                where: { externalId: match.id },
+                select: { status: true, streamUrl: true, source: true },
+            });
+            const shouldPreserveStatus = existing?.source === 'sportdevs';
+            const nextStatus = shouldPreserveStatus ? existing?.status : match.status;
+            const nextStreamUrl = match.streamUrl || existing?.streamUrl || null;
+            const updateData: any = {
+                league: match.league,
+                leagueLogo: match.leagueLogo,
+                tournament: match.tournament,
+                scheduledAt: match.scheduledAt,
+                homeScore: match.homeScore,
+                awayScore: match.awayScore,
+                homeOdds: match.homeOdds,
+                awayOdds: match.awayOdds,
+            };
+            if (!shouldPreserveStatus) {
+                updateData.status = match.status;
+            }
+            if (match.streamUrl) {
+                updateData.streamUrl = match.streamUrl;
+            }
+            const upsertedMatch = await this.prisma.esportsMatch.upsert({
+                where: { externalId: match.id },
+                create: {
+                    externalId: match.id,
+                    game: match.game,
+                    league: match.league,
+                    leagueLogo: match.leagueLogo,
+                    tournament: match.tournament,
+                    homeTeamId: homeTeam.id,
+                    awayTeamId: awayTeam.id,
+                    bestOf: match.bestOf,
+                    scheduledAt: match.scheduledAt,
+                    status: nextStatus || match.status,
+                    homeScore: match.homeScore,
+                    awayScore: match.awayScore,
+                    homeOdds: match.homeOdds,
+                    awayOdds: match.awayOdds,
+                    streamUrl: nextStreamUrl,
+                    source: 'pandascore',
+                },
+                update: updateData,
+            });
+            if (existing && existing.status !== (nextStatus || match.status)) {
+                this.logger.log(`📢 Broadcasting esports match status change: ${match.id} (${existing.status} -> ${nextStatus || match.status})`);
+                this.eventsGateway.server.emit('esportsUpdate', {
+                    id: upsertedMatch.id,
+                    externalId: match.id,
+                    status: nextStatus || match.status,
+                    homeScore: match.homeScore,
+                    awayScore: match.awayScore,
+                    timestamp: new Date(),
+                });
+            }
+        }
+        catch (error) {
+            this.logger.error(`Failed to upsert match ${match.id}`, error);
+        }
+    }
+    async syncLOLMatches() {
+        try {
+            const matches = await this.riotService.getLiveAndUpcomingMatches();
+            await this.upsertMatches(matches, 'riot');
+            this.logger.log(`Synced ${matches.length} LOL matches from Riot`);
+        }
+        catch (error) {
+            this.logger.error('Failed to sync LOL matches', error);
+        }
+    }
+    async syncDOTA2Matches() {
+        try {
+            const matches = await this.openDotaService.getLiveAndUpcomingMatches();
+            await this.upsertMatches(matches, 'opendota');
+            this.logger.log(`Synced ${matches.length} DOTA2 matches from OpenDota`);
+        }
+        catch (error) {
+            this.logger.error('Failed to sync DOTA2 matches', error);
+        }
+    }
+    async syncCS2Matches() {
+        try {
+            const matches = await this.cs2Simulator.generateMatches();
+            await this.upsertMatches(matches, 'simulator');
+            this.logger.log(`Synced ${matches.length} CS2 matches from simulator`);
+        }
+        catch (error) {
+            this.logger.error('Failed to sync CS2 matches', error);
+        }
+    }
+    private async upsertMatches(matches: EsportsMatchDto[], source: string) {
+        for (const match of matches) {
+            try {
+                const existing = await this.prisma.esportsMatch.findUnique({
+                    where: { externalId: match.id },
+                    select: { status: true, streamUrl: true, source: true },
+                });
+                const homeTeam = await this.upsertTeam(match.homeTeam, match.game);
+                const awayTeam = await this.upsertTeam(match.awayTeam, match.game);
+                const shouldPreserveStatus = existing?.source === 'sportdevs' && source !== 'sportdevs';
+                const nextStatus = shouldPreserveStatus ? existing?.status : match.status;
+                const nextStreamUrl = match.streamUrl || existing?.streamUrl || null;
+                const updateData: any = {
+                    homeScore: match.homeScore,
+                    awayScore: match.awayScore,
+                    homeOdds: match.homeOdds,
+                    awayOdds: match.awayOdds,
+                };
+                if (!shouldPreserveStatus) {
+                    updateData.status = nextStatus;
+                }
+                if (match.streamUrl) {
+                    updateData.streamUrl = match.streamUrl;
+                }
+                if (source === 'sportdevs') {
+                    updateData.source = source;
+                }
+                await this.prisma.esportsMatch.upsert({
+                    where: { externalId: match.id },
+                    create: {
+                        externalId: match.id,
+                        game: match.game,
+                        league: match.league,
+                        tournament: match.tournament,
+                        homeTeamId: homeTeam.id,
+                        awayTeamId: awayTeam.id,
+                        bestOf: match.bestOf,
+                        scheduledAt: match.scheduledAt,
+                        status: nextStatus || match.status,
+                        homeScore: match.homeScore,
+                        awayScore: match.awayScore,
+                        homeOdds: match.homeOdds,
+                        awayOdds: match.awayOdds,
+                        streamUrl: nextStreamUrl,
+                        source,
+                    },
+                    update: updateData,
+                });
+            }
+            catch (error) {
+                this.logger.error(`Failed to upsert match ${match.id}`, error);
+            }
+        }
+    }
+    private async upsertTeam(team: EsportsMatchDto['homeTeam'], game: string) {
+        return this.prisma.esportsTeam.upsert({
+            where: { externalId: team.id },
+            create: {
+                externalId: team.id,
+                name: team.name,
+                shortName: team.shortName,
+                logo: team.logo,
+                game,
+            },
+            update: {
+                name: team.name,
+                shortName: team.shortName,
+                logo: team.logo,
+            },
+        });
+    }
+    async getMatches(options?: {
+        game?: string;
+        status?: string;
+        limit?: number;
+    }) {
+        const where: any = {};
+        if (options?.game) {
+            where.game = options.game;
+        }
+        if (options?.status) {
+            where.status = options.status;
+        }
+        else {
+            where.status = { in: ['UPCOMING', 'LIVE'] };
+        }
+        const matches = await this.prisma.esportsMatch.findMany({
+            where,
+            include: {
+                homeTeam: true,
+                awayTeam: true,
+            },
+            orderBy: [
+                { status: 'asc' },
+                { scheduledAt: 'asc' },
+            ],
+            take: options?.limit || 50,
+        });
+        return matches.map(match => ({
+            id: match.id,
+            externalId: match.externalId,
+            game: match.game,
+            league: match.league,
+            tournament: match.tournament,
+            homeTeam: {
+                id: match.homeTeam.id,
+                name: match.homeTeam.name,
+                shortName: match.homeTeam.shortName,
+                logo: match.homeTeam.logo,
+            },
+            awayTeam: {
+                id: match.awayTeam.id,
+                name: match.awayTeam.name,
+                shortName: match.awayTeam.shortName,
+                logo: match.awayTeam.logo,
+            },
+            bestOf: match.bestOf,
+            scheduledAt: match.scheduledAt,
+            status: match.status,
+            homeScore: match.homeScore,
+            awayScore: match.awayScore,
+            homeOdds: match.homeOdds,
+            awayOdds: match.awayOdds,
+            streamUrl: match.streamUrl,
+            homeBetPool: match.homeBetPool,
+            awayBetPool: match.awayBetPool,
+        }));
+    }
+    async getMatchById(id: string) {
+        const match = await this.prisma.esportsMatch.findUnique({
+            where: { id },
+            include: {
+                homeTeam: true,
+                awayTeam: true,
+                bets: {
+                    select: {
+                        prediction: true,
+                        amount: true,
+                    },
+                },
+            },
+        });
+        if (!match) {
+            return null;
+        }
+        const betStats = match.bets.reduce((acc, bet) => {
+            if (bet.prediction === 'HOME') {
+                acc.homeCount++;
+                acc.homeAmount += bet.amount;
+            }
+            else if (bet.prediction === 'AWAY') {
+                acc.awayCount++;
+                acc.awayAmount += bet.amount;
+            }
+            return acc;
+        }, { homeCount: 0, awayCount: 0, homeAmount: 0, awayAmount: 0 });
+        return {
+            ...match,
+            betStats,
+        };
+    }
+    async placeBet(_userId: string, _matchId: string, _prediction: 'HOME' | 'AWAY', _amount: number) {
+        throw new BadRequestException('样品演示：电竞下注已禁用');
+    }
+    async getHotMatches(limit = 5) {
+        const matches = await this.prisma.esportsMatch.findMany({
+            where: {
+                status: { in: ['LIVE', 'UPCOMING'] },
+            },
+            include: {
+                homeTeam: true,
+                awayTeam: true,
+            },
+            orderBy: [
+                { status: 'asc' },
+                { homeBetPool: 'desc' },
+            ],
+            take: limit,
+        });
+        return matches.map(match => ({
+            id: match.id,
+            externalId: match.externalId,
+            game: match.game,
+            league: match.league,
+            tournament: match.tournament,
+            homeTeam: {
+                id: match.homeTeam.id,
+                name: match.homeTeam.name,
+                shortName: match.homeTeam.shortName,
+                logo: match.homeTeam.logo,
+            },
+            awayTeam: {
+                id: match.awayTeam.id,
+                name: match.awayTeam.name,
+                shortName: match.awayTeam.shortName,
+                logo: match.awayTeam.logo,
+            },
+            bestOf: match.bestOf,
+            scheduledAt: match.scheduledAt,
+            status: match.status,
+            homeScore: match.homeScore,
+            awayScore: match.awayScore,
+            homeOdds: match.homeOdds,
+            awayOdds: match.awayOdds,
+            streamUrl: match.streamUrl,
+            homeBetPool: match.homeBetPool,
+            awayBetPool: match.awayBetPool,
+        }));
+    }
+    async getUserBets(userId: string, limit = 20) {
+        return this.prisma.esportsBet.findMany({
+            where: { userId },
+            include: {
+                match: {
+                    include: {
+                        homeTeam: true,
+                        awayTeam: true,
+                    },
+                },
+            },
+            orderBy: { createdAt: 'desc' },
+            take: limit,
+        });
+    }
+}

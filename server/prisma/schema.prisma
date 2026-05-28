@@ -1,0 +1,680 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ======== Enums ========
+
+enum MarketStatus {
+  ACTIVE
+  LOCKED
+  RESOLVED
+}
+
+enum MarketOutcome {
+  YES
+  NO
+}
+
+enum BetStatus {
+  PENDING
+  ACTIVE
+  SETTLED
+  CANCELLED
+}
+
+enum BetResult {
+  WIN
+  LOSE
+  BREAKEVEN
+}
+
+enum RoundStatus {
+  BETTING
+  LOCKED
+  SETTLING
+  SETTLED
+}
+
+enum RoundResult {
+  LONG_WIN
+  SHORT_WIN
+  DRAW
+}
+
+// ======== Core ========
+
+model User {
+  id              String    @id
+  address         String?
+  username        String?
+  pts             Float     @default(0)
+  createdAt       DateTime  @default(now())
+  teamId          String?
+  combo           Int       @default(0)
+  discordId       String?   @unique
+  email           String?   @unique
+  maxCombo        Int       @default(0)
+  multiplier      Float     @default(1.0)
+  onChainBalance  Float     @default(0)
+  privyId         String?   @unique
+  referralCode    String    @unique
+  referrerId      String?
+  role            String    @default("USER")
+  totalBattles    Int       @default(0)
+  totalWins       Int       @default(0)
+  twitterId       String?   @unique
+  version         Int       @default(0)
+
+  team            Team?              @relation(fields: [teamId], references: [id], onDelete: SetNull)
+  referrer        User?              @relation("ReferralRelation", fields: [referrerId], references: [id], onDelete: SetNull)
+  referred        User[]             @relation("ReferralRelation")
+  bets            Bet[]
+  battles         Battle[]
+  userTasks       UserTask[]
+  strategies      UserStrategy[]
+  aiSuggestions   AISuggestion[]
+  seasonRankings  SeasonRanking[]
+  tournamentParts TournamentParticipant[]
+  transactions    Transaction[]
+  referralRewardsReferee   ReferralReward[] @relation("RefereeRewards")
+  referralRewardsReferrer  ReferralReward[] @relation("ReferrerRewards")
+  notifications   Notification[]
+  esportsBets     EsportsBet[]
+  footballBets    FootballBet[]
+
+  @@unique([address])
+}
+
+model Market {
+  id             String        @id
+  title          String
+  status         MarketStatus  @default(ACTIVE)
+  endTime        DateTime
+  resolutionTime DateTime
+  poolSize       Float         @default(0)
+  outcome        MarketOutcome?
+  aiPrediction   String?
+  createdAt      DateTime      @default(now())
+  category       String        @default("C10")
+  endPrice       Decimal?
+  lockTime       DateTime?
+  noPool         Float         @default(0)
+  startPrice     Decimal?
+  timeframe      String        @default("24H")
+  yesPool        Float         @default(0)
+
+  bets            Bet[]
+  aiSuggestions   AISuggestion[]
+  marketSnapshots MarketSnapshot[]
+}
+
+model Bet {
+  id             String        @id
+  userId         String
+  marketId       String
+  position       MarketOutcome
+  amount         Float
+  timestamp      DateTime      @default(now())
+  claimed        Boolean       @default(false)
+  entryPrice     Float?
+  exitPrice      Float?
+  exitReason     String?
+  expiresAt      DateTime?
+  holdDuration   String?
+  lockedOdds     Float?
+  payout         Float?
+  potentialPayout Float?
+  result         BetResult?
+  settledAt      DateTime?
+  status         BetStatus     @default(PENDING)
+  stopLoss       Float?
+  strategyId     String?
+  takeProfit     Float?
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Restrict)
+  market Market @relation(fields: [marketId], references: [id], onDelete: Restrict)
+
+  @@index([userId, status, timestamp])
+  @@index([marketId, status])
+  @@index([status, expiresAt])
+}
+
+model Agent {
+  id             String  @id
+  name           String
+  description    String
+  level          String
+  winRate        Float   @default(0)
+  aggressiveness Float   @default(0.5)
+  difficultyBias Float   @default(0)
+  isActive       Boolean @default(true)
+  personality    String?
+  trapFrequency  Float   @default(0.1)
+
+  battles Battle[]
+}
+
+model Battle {
+  id             String   @id
+  userId         String
+  agentId        String
+  userPick       MarketOutcome
+  agentPick      MarketOutcome
+  winner         String?
+  status         String   @default("COMPLETED")
+  timestamp      DateTime @default(now())
+  agentStrategy  String?
+  amount         Float    @default(0)
+  entryPrice     Float?
+  exitPrice      Float?
+  isPublic       Boolean  @default(true)
+  marketType     String?
+  priceChange    Float?
+  reasoning      String?
+  reward         Float?
+  seasonId       String?
+  technicalData  String?
+  timeframe      String?
+  tournamentId   String?
+  userStrategy   String?
+
+  user       User        @relation(fields: [userId], references: [id], onDelete: Restrict)
+  agent      Agent       @relation(fields: [agentId], references: [id], onDelete: Restrict)
+  season     Season?     @relation(fields: [seasonId], references: [id], onDelete: SetNull)
+  tournament Tournament? @relation(fields: [tournamentId], references: [id], onDelete: SetNull)
+
+  @@index([userId, timestamp])
+  @@index([seasonId])
+  @@index([tournamentId])
+  @@index([isPublic, timestamp])
+}
+
+// ======== Team ========
+
+model Team {
+  id          String   @id
+  name        String   @unique
+  description String?
+  totalPts    Float    @default(0)
+  rank        Int?
+  createdAt   DateTime @default(now())
+  inviteCode  String?  @unique
+  isPublic    Boolean  @default(true)
+  leaderId    String?
+  maxMembers  Int      @default(20)
+
+  members User[]
+}
+
+// ======== Tasks ========
+
+model Task {
+  id          String  @id
+  title       String
+  description String
+  reward      Float
+  type        String
+  goal        Int
+  isDaily     Boolean @default(false)
+
+  userTasks UserTask[]
+}
+
+model UserTask {
+  id        String   @id
+  userId    String
+  taskId    String
+  progress  Int      @default(0)
+  status    String   @default("IN_PROGRESS")
+  updatedAt DateTime @updatedAt
+  claimedAt DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Restrict)
+  task Task @relation(fields: [taskId], references: [id], onDelete: Restrict)
+
+  @@unique([userId, taskId])
+}
+
+// ======== Strategy & AI ========
+
+model UserStrategy {
+  id             String   @id
+  userId         String
+  name           String
+  riskLevel      String   @default("MEDIUM")
+  trendFollowing Boolean  @default(true)
+  volatilityPref String   @default("NORMAL")
+  holdDuration   String   @default("1H")
+  maxBetPercent  Float    @default(10)
+  stopLoss       Float?
+  takeProfit     Float?
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@unique([userId, name])
+}
+
+model AISuggestion {
+  id         String        @id
+  userId     String
+  marketId   String
+  strategyId String?
+  suggestion MarketOutcome
+  confidence Float
+  reasoning  String
+  followed   Boolean       @default(false)
+  result     String?
+  createdAt  DateTime      @default(now())
+
+  user   User   @relation(fields: [userId], references: [id])
+  market Market @relation(fields: [marketId], references: [id])
+
+  @@index([userId, createdAt])
+}
+
+// ======== Season & Tournament ========
+
+model Season {
+  id        String   @id
+  name      String
+  type      String
+  startDate DateTime
+  endDate   DateTime
+  status    String   @default("ACTIVE")
+  prizePool Float    @default(0)
+  rewards   String?
+  createdAt DateTime @default(now())
+
+  rankings   SeasonRanking[]
+  battles    Battle[]
+  tournaments Tournament[]
+
+  @@index([status, endDate])
+}
+
+model SeasonRanking {
+  id            String   @id
+  seasonId      String
+  userId        String
+  totalBattles  Int      @default(0)
+  wins          Int      @default(0)
+  losses        Int      @default(0)
+  draws         Int      @default(0)
+  winRate       Float    @default(0)
+  totalPts      Float    @default(0)
+  rank          Int?
+  rewardClaimed Boolean  @default(false)
+  rewardAmount  Float?
+  updatedAt     DateTime @updatedAt
+
+  season Season @relation(fields: [seasonId], references: [id], onDelete: Restrict)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@unique([seasonId, userId])
+  @@index([seasonId, totalPts])
+}
+
+model Tournament {
+  id          String   @id
+  name        String
+  description String?
+  type        String
+  startDate   DateTime
+  endDate     DateTime
+  status      String   @default("UPCOMING")
+  entryFee    Float    @default(0)
+  prizePool   Float    @default(0)
+  maxPlayers  Int      @default(100)
+  minLevel    String?
+  rules       String?
+  rewards     String?
+  createdAt   DateTime @default(now())
+
+  seasonId     String?
+  season       Season?               @relation(fields: [seasonId], references: [id])
+  participants TournamentParticipant[]
+  battles      Battle[]
+
+  @@index([status, startDate])
+}
+
+model TournamentParticipant {
+  id            String   @id
+  tournamentId  String
+  userId        String
+  joinedAt      DateTime @default(now())
+  wins          Int      @default(0)
+  losses        Int      @default(0)
+  score         Float    @default(0)
+  rank          Int?
+  eliminated    Boolean  @default(false)
+  rewardClaimed Boolean  @default(false)
+  rewardAmount  Float?
+
+  tournament Tournament @relation(fields: [tournamentId], references: [id], onDelete: Restrict)
+  user       User       @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@unique([tournamentId, userId])
+  @@index([tournamentId, score])
+}
+
+// ======== Market Index & Data ========
+
+model MarketIndex {
+  id        String   @id
+  type      String
+  value     Float
+  change24h Float?
+  timestamp DateTime @default(now())
+
+  @@index([type, timestamp])
+}
+
+model IndexWeight {
+  id       String  @id
+  category String  @default("C10")
+  symbol   String
+  weight   Float
+  supply   Float?
+  isActive Boolean @default(true)
+  updatedAt DateTime @updatedAt
+
+  @@unique([category, symbol])
+  @@index([category, isActive])
+}
+
+model MarketSnapshot {
+  id           String   @id
+  marketId     String
+  snapshotType String
+  timestamp    DateTime @default(now())
+  indexValue   Decimal
+  components   Json
+  formulaParams Json?
+  createdAt    DateTime @default(now())
+
+  market Market @relation(fields: [marketId], references: [id], onDelete: Cascade)
+
+  @@index([marketId, snapshotType])
+  @@index([marketId, timestamp])
+}
+
+// ======== Transactions ========
+
+model Transaction {
+  id          String    @id
+  userId      String
+  type        String
+  amount      Float
+  token       String    @default("ETH")
+  txHash      String    @unique
+  status      String    @default("PENDING")
+  createdAt   DateTime  @default(now())
+  confirmedAt DateTime?
+  chainId     Int       @default(11155111)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@index([userId, createdAt])
+  @@index([chainId, status])
+}
+
+// ======== System ========
+
+model SystemConfig {
+  id        String   @id
+  key       String   @unique
+  value     String
+  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now())
+}
+
+model ContractConfig {
+  id           String   @id
+  name         String
+  type         String
+  version      String   @default("1.0.0")
+  chainId      Int
+  chainName    String
+  address      String
+  abi          String?
+  isActive     Boolean  @default(true)
+  isPrimary    Boolean  @default(false)
+  deployedAt   DateTime?
+  deployTxHash String?
+  deployer     String?
+  metadata     String?
+  notes        String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  deployments ContractDeployment[]
+
+  @@index([type, chainId])
+  @@index([isActive])
+  @@index([type, isActive, isPrimary])
+  @@unique([type, chainId, isPrimary])
+}
+
+model ContractDeployment {
+  id           String   @id
+  configId     String
+  chainId      Int
+  address      String
+  txHash       String
+  deployer     String
+  blockNumber  Int?
+  gasUsed      String?
+  status       String   @default("PENDING")
+  errorMessage String?
+  createdAt    DateTime @default(now())
+
+  config ContractConfig @relation(fields: [configId], references: [id])
+
+  @@index([configId])
+  @@index([status])
+}
+
+// ======== Round ========
+
+model Round {
+  id            String      @id
+  roundNumber   Int
+  category      String      @default("C10")
+  startTime     DateTime
+  endTime       DateTime
+  lockTime      DateTime
+  openPrice     Float?
+  closePrice    Float?
+  highPrice     Float?
+  lowPrice      Float?
+  status        RoundStatus @default(BETTING)
+  result        RoundResult?
+  longPool      Float       @default(0)
+  shortPool     Float       @default(0)
+  longBetCount  Int         @default(0)
+  shortBetCount Int         @default(0)
+  createdAt     DateTime    @default(now())
+
+  @@unique([category, roundNumber])
+  @@index([status, endTime])
+  @@index([category, roundNumber])
+}
+
+// ======== Referral & Notification ========
+
+model ReferralReward {
+  id          String   @id
+  referrerId  String
+  refereeId   String
+  amount      Float
+  type        String
+  description String?
+  createdAt   DateTime @default(now())
+
+  referrer User @relation("ReferrerRewards", fields: [referrerId], references: [id], onDelete: Restrict)
+  referee  User @relation("RefereeRewards", fields: [refereeId], references: [id], onDelete: Restrict)
+
+  @@index([referrerId, createdAt])
+  @@index([refereeId])
+}
+
+model Notification {
+  id        String   @id
+  userId    String
+  type      String
+  title     String
+  content   String
+  data      String?
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@index([userId, isRead, createdAt])
+  @@index([userId, createdAt])
+}
+
+// ======== Admin ========
+
+model AdminUser {
+  id           String    @id
+  username     String    @unique
+  passwordHash String
+  role         String    @default("admin")
+  isActive     Boolean   @default(true)
+  lastLoginAt  DateTime?
+  lastLoginIp  String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @default(now())
+
+  auditLogs AdminAuditLog[]
+}
+
+model AdminAuditLog {
+  id        String   @id
+  adminId   String
+  action    String
+  target    String?
+  details   String?
+  ip        String?
+  createdAt DateTime @default(now())
+
+  admin AdminUser @relation(fields: [adminId], references: [id], onDelete: Restrict)
+
+  @@index([adminId, createdAt])
+  @@index([action, createdAt])
+}
+
+// ======== Esports ========
+
+model EsportsTeam {
+  id         String @id
+  externalId Int    @unique
+  name       String
+  shortName  String?
+  logo       String?
+  game       String
+
+  homeMatches EsportsMatch[] @relation("HomeTeam")
+  awayMatches EsportsMatch[] @relation("AwayTeam")
+}
+
+model EsportsMatch {
+  id          String   @id
+  externalId  Int      @unique
+  game        String
+  league      String
+  leagueLogo  String?
+  tournament  String?
+  homeTeamId  String
+  awayTeamId  String
+  bestOf      Int      @default(1)
+  scheduledAt DateTime
+  status      String   @default("UPCOMING")
+  homeScore   Int      @default(0)
+  awayScore   Int      @default(0)
+  homeOdds    Float?
+  awayOdds    Float?
+  homeBetPool Float    @default(0)
+  awayBetPool Float    @default(0)
+  streamUrl   String?
+  source      String?
+
+  homeTeam EsportsTeam @relation("HomeTeam", fields: [homeTeamId], references: [id])
+  awayTeam EsportsTeam @relation("AwayTeam", fields: [awayTeamId], references: [id])
+  bets     EsportsBet[]
+}
+
+model EsportsBet {
+  id         String   @id
+  userId     String
+  matchId    String
+  prediction String
+  amount     Float
+  odds       Float?
+  payout     Float?
+  result     String?
+  status     String   @default("PENDING")
+  createdAt  DateTime @default(now())
+
+  user  User         @relation(fields: [userId], references: [id])
+  match EsportsMatch @relation(fields: [matchId], references: [id])
+}
+
+// ======== Football ========
+
+model FootballMatch {
+  id            String   @id
+  fixtureId     Int
+  league        String
+  leagueLogo    String?
+  leagueCountry String?
+  round         String?
+  homeTeamId    Int
+  homeTeamName  String
+  homeTeamLogo  String?
+  awayTeamId    Int
+  awayTeamName  String
+  awayTeamLogo  String?
+  scheduledAt   DateTime
+  status        String   @default("UPCOMING")
+  elapsed       Int?
+  homeScore     Int      @default(0)
+  awayScore     Int      @default(0)
+  homeOdds      Float?
+  drawOdds      Float?
+  awayOdds      Float?
+  venue         String?
+  tvChannels    String?
+  settled       Boolean  @default(false)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  bets FootballBet[]
+}
+
+model FootballBet {
+  id         String   @id
+  userId     String
+  matchId    String
+  prediction String
+  amount     Float
+  odds       Float?
+  payout     Float?
+  result     String?
+  status     String   @default("PENDING")
+  createdAt  DateTime @default(now())
+
+  user  User          @relation(fields: [userId], references: [id])
+  match FootballMatch @relation(fields: [matchId], references: [id])
+}
