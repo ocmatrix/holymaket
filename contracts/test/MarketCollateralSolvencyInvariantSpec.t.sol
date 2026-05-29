@@ -38,6 +38,7 @@ contract MarketCollateralSolvencyInvariantSpec is Test {
             treasury
         );
         factory.setCollateralAllowed(address(usdt), true);
+        factory.setAmmEngine(address(engine));
 
         usdt.mint(creator, 50_000_000);
         usdt.mint(userA, 50_000_000);
@@ -64,9 +65,6 @@ contract MarketCollateralSolvencyInvariantSpec is Test {
         usdt.approve(address(factory), p.initialCollateral);
         (, address marketAddress) = factory.createMarket(p);
         market = BinaryPredictionMarket(marketAddress);
-
-        vm.prank(address(factory));
-        market.setAmmEngine(address(engine));
     }
 
     function _fundMarketExtra(BinaryPredictionMarket market, uint256 amount) internal {

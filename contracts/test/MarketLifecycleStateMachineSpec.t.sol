@@ -39,6 +39,7 @@ contract MarketLifecycleStateMachineSpec is Test {
             treasury
         );
         factory.setCollateralAllowed(address(usdt), true);
+        factory.setAmmEngine(address(engine));
 
         usdt.mint(creator, 20_000_000);
         usdt.mint(yesTrader, 5_000_000);
@@ -73,8 +74,6 @@ contract MarketLifecycleStateMachineSpec is Test {
 
         (, address marketAddress) = factory.createMarket(p);
         market = BinaryPredictionMarket(marketAddress);
-        vm.prank(address(factory));
-        market.setAmmEngine(address(engine));
     }
 
     function _backMarket(BinaryPredictionMarket market, uint256 amount) internal {

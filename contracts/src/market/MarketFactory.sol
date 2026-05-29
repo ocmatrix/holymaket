@@ -25,6 +25,7 @@ contract MarketFactory is AccessControl {
     address public resolver;
     address public feeRouter;
     address public treasury;
+    address public ammEngine;
 
     struct CreateMarketParams {
         string question;
@@ -104,6 +105,7 @@ contract MarketFactory is AccessControl {
             TradeLimitExceeded(p.maxTradeAmount, p.initialCollateral));
         require(p.startTime > 0, "startTime zero");
         require(p.startTime < p.endTime, "invalid time range");
+        require(ammEngine != address(0), "engine not set");
 
         BinaryPredictionMarket newMarket = new BinaryPredictionMarket(
             p.question,
@@ -125,6 +127,8 @@ contract MarketFactory is AccessControl {
         IERC20 collateralToken = IERC20(p.collateral);
         collateralToken.safeTransferFrom(msg.sender, address(this), p.initialCollateral);
         collateralToken.safeTransfer(address(newMarket), p.initialCollateral);
+        newMarket.setAmmEngine(ammEngine);
+        newMarket.setMarketId(nextMarketId);
         newMarket.initializeLiquidity(p.initialCollateral, p.initialPriceYesBps);
 
         marketId = nextMarketId;
@@ -158,5 +162,10 @@ contract MarketFactory is AccessControl {
 
     function setTreasury(address _treasury) external onlyRole(DEFAULT_ADMIN_ROLE) {
         treasury = _treasury;
+    }
+
+    function setAmmEngine(address _ammEngine) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        require(_ammEngine != address(0), "engine zero");
+        ammEngine = _ammEngine;
     }
 }

@@ -42,6 +42,7 @@ contract MarketFactoryParamSpec is Test {
             treasury
         );
         factory.setCollateralAllowed(address(usdt), true);
+        factory.setAmmEngine(address(engine));
         
         usdt.mint(creator, MIN_INITIAL_COLLATERAL * 10);
         usdt.approve(address(factory), type(uint256).max);

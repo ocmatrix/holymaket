@@ -37,6 +37,7 @@ contract MarketFactoryCreateMarketSpec is Test {
             treasury
         );
         factory.setCollateralAllowed(address(usdt), true);
+        factory.setAmmEngine(address(engine));
 
         usdt.mint(user, 100_000_000_000);
     }
@@ -116,21 +117,76 @@ contract MarketFactoryCreateMarketSpec is Test {
         assertEq(usdt.balanceOf(address(market)), INITIAL_COLLATERAL + collateralIn - quoteFee);
     }
 
+    function test_createMarket_autoWiresAmmEngine() public {
+        BinaryPredictionMarket market = _createMarket(INITIAL_COLLATERAL, 5000);
+
+        assertEq(address(market.ammEngine()), address(engine));
+    }
+
+    function test_createMarket_autoSetsMarketId() public {
+        (, address marketAddress) = _createMarketRaw(INITIAL_COLLATERAL, 5000);
+        BinaryPredictionMarket market = BinaryPredictionMarket(marketAddress);
+
+        assertEq(market.marketId(), 0);
+
+        (, address secondMarketAddress) = _createMarketRaw(INITIAL_COLLATERAL, 5000);
+        BinaryPredictionMarket secondMarket = BinaryPredictionMarket(secondMarketAddress);
+
+        assertEq(secondMarket.marketId(), 1);
+    }
+
+    function test_createMarket_reverts_whenAmmEngineNotSet() public {
+        MarketFactory unconfiguredFactory = new MarketFactory(
+            500,
+            1000,
+            1000,
+            INITIAL_COLLATERAL,
+            3000,
+            7000,
+            resolver,
+            feeRouter,
+            treasury
+        );
+        unconfiguredFactory.setCollateralAllowed(address(usdt), true);
+        usdt.mint(creator, INITIAL_COLLATERAL);
+        usdt.approve(address(unconfiguredFactory), INITIAL_COLLATERAL);
+
+        vm.expectRevert("engine not set");
+        unconfiguredFactory.createMarket(_marketParams(address(usdt), INITIAL_COLLATERAL, 5000));
+    }
+
+    function test_createMarket_allowsTradingWithoutManualWiring() public {
+        BinaryPredictionMarket market = _createMarket(INITIAL_COLLATERAL, 5000);
+
+        vm.startPrank(user);
+        usdt.approve(address(market), type(uint256).max);
+        market.buyYes(10_000, 1);
+        market.buyNo(10_000, 1);
+        market.sellYes(1_000, 1);
+        market.sellNo(1_000, 1);
+        vm.stopPrank();
+
+        assertGt(market.totalFeesCollected(), 0);
+        assertGt(market.yesShares(user), 0);
+        assertGt(market.noShares(user), 0);
+    }
+
     function _createMarket(uint256 initialCollateral, uint16 initialPriceYesBps)
         internal
         returns (BinaryPredictionMarket)
     {
+        (, address marketAddress) = _createMarketRaw(initialCollateral, initialPriceYesBps);
+        return BinaryPredictionMarket(marketAddress);
+    }
+
+    function _createMarketRaw(uint256 initialCollateral, uint16 initialPriceYesBps)
+        internal
+        returns (uint256 marketId, address marketAddress)
+    {
         usdt.mint(creator, initialCollateral);
         usdt.approve(address(factory), initialCollateral);
 
-        (, address marketAddress) = factory.createMarket(
-            _marketParams(address(usdt), initialCollateral, initialPriceYesBps)
-        );
-        BinaryPredictionMarket market = BinaryPredictionMarket(marketAddress);
-
-        vm.prank(address(factory));
-        market.setAmmEngine(address(engine));
-        return market;
+        return factory.createMarket(_marketParams(address(usdt), initialCollateral, initialPriceYesBps));
     }
 
     function _marketParams(address collateral, uint256 initialCollateral, uint16 initialPriceYesBps)

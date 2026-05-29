@@ -28,6 +28,7 @@ contract ResolverBoundarySpec is Test {
             resolver, feeRouter, treasury
         );
         factory.setCollateralAllowed(address(usdt), true);
+        factory.setAmmEngine(address(engine));
         
         usdt.mint(creator, 1_000_000 * 10);
         
@@ -45,8 +46,6 @@ contract ResolverBoundarySpec is Test {
         vm.stopPrank();
         
         market = BinaryPredictionMarket(marketAddr);
-        vm.prank(address(factory));
-        market.setAmmEngine(address(engine));
     }
 
     // 1. Resolve Permissions

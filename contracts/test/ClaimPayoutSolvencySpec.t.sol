@@ -40,6 +40,7 @@ contract ClaimPayoutSolvencySpec is Test {
             treasury
         );
         factory.setCollateralAllowed(address(usdt), true);
+        factory.setAmmEngine(address(engine));
 
         usdt.mint(creator, 20_000_000);
         usdt.mint(yesHolderA, 5_000_000);
@@ -67,9 +68,6 @@ contract ClaimPayoutSolvencySpec is Test {
         usdt.approve(address(factory), p.initialCollateral);
         (, address marketAddress) = factory.createMarket(p);
         market = BinaryPredictionMarket(marketAddress);
-
-        vm.prank(address(factory));
-        market.setAmmEngine(address(engine));
     }
 
     function _fundMarketExtra(BinaryPredictionMarket market, uint256 amount) internal {
