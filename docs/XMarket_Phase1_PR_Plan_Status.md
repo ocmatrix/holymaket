@@ -174,4 +174,35 @@
 - 是否部署真实测试网：否
 - 是否提交真实私钥/RPC：否
 - 状态：Stage 1 完成，等待进入 Stage 2
-EOF; __tr_native_ec=$?; pwd -P >| '/var/folders/rg/2r1rs2t56jsftdgsyh7ntlbw0000gn/T/agent-toolhost/jobs/job-ff0437ca72c94600a91928d2c4eb68ff/cwd.txt'; exit "$__tr_native_ec"
+
+## PR-16 Stage 2 BSC Testnet 部署与 Smoke Test 记录
+
+- PR 编号：PR-16
+- 阶段：Stage 2-B / Stage 2-C
+- 网络：BSC Testnet (Chain ID: 97)
+- RPC：`https://data-seed-prebsc-1-s1.bnbchain.org:8545`
+- Deployer：`0x910956C25fD205a03D6314A3d787194c00022802`
+- 部署结果：
+  - MarketFactory：`0x45ab369f65c0ef44c1325323f283e6acc92b8bd0`
+  - CPMMEngine：`0x16fae185a854a54307f6dea9c0d53e326bb4f82f`
+  - Standalone BinaryPredictionMarket：`0x05caa8a264b2436f1851a58f4f183350fd330a2f`
+  - MockUSDT：`0xb90278a476319CbDAd259e4fEAA8E7d9Da05e1EB`
+- 部署交易（deploy tx）：
+  - CPMMEngine：`0x210c61adff431bb21fddfd29a448368fd4b9364368d1aff89adfd7517d1b7f24`
+  - MarketFactory：`0xc94c128647e8f5d26c975674bef32f5995e9fc2c948416345ccb1237b64c1942`
+  - Standalone BinaryPredictionMarket：`0xa67b78ab5efb6944fc90ccc14057828f1d2087d9810422bb3ad3a5f9baa4a54f`
+- MockUSDT 准备：
+  - mint tx：`0x7a163605282b91fa1c26b1433dabd8743ffafa815927b2400869d2efb82d13ae`
+  - minted amount：1,000,000 mUSDT
+- Smoke Test：
+  - Factory-created market address：`0x87445F25F78e3eeE91090C80BdeB2F1ae1296A07`
+  - marketId：`0`
+  - outcome：YES
+  - status：Resolved
+- 文档记录：
+  - `docs/deployment/bsc-testnet-deployment-record.md`
+  - `docs/deployment/bsc-testnet-smoke-test-report.md`
+- 安全边界：
+  - 不输出私钥，不提交 `.env`
+  - 不提交 `contracts/cache/`、不提交 `contracts/broadcast/`
+  - 不部署主网，不使用真实 USDT，仅使用 BSC Testnet mUSDT
