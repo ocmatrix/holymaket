@@ -12,7 +12,8 @@
 - PR-17 Stage 4：已完成（Frontend Local Full Acceptance）
 - PR-17 docs-only：已完成（Record Frontend Minimum Integration Completion）
 - PR-CI-2 / PR-TOOL-1：已完成（GitHub CLI Automation Reliability）
-- 下一推荐执行：PR-18 Indexer Design 或 PR-11 / PR-12
+- PR-18 Stage 1：进行中（Indexer Design — 设计文档）
+- 下一推荐执行：PR-18 Stage 2（合并设计文档）或 PR-19（Indexer Implementation）
 
 ## PR-10 最终验收记录
 
@@ -260,3 +261,66 @@
   - 不发送链上交易
   - 不新增后端 API
   - 不修改合约代码
+
+## PR-18 Stage 1 本地设计记录
+
+- PR 编号：PR-18
+- 阶段：Stage 1
+- 名称：Indexer Design
+- 当前工作分支：`docs/pr-18-indexer-design`
+- 基线 commit：`d0a2549`
+- 本 PR 目标：
+  - Indexer 设计文档（Design only，不实现）
+  - 明确 Indexer 边界
+  - 明确事件索引计划
+  - 明确数据模型
+  - 明确数据来源限制
+  - 技术选型比较
+  - 前端接口边界设计
+  - PR-19 实现计划
+- 新增文件：
+  - `docs/indexer/indexer-design.md`
+- 修改文件：
+  - `docs/XMarket_Phase1_PR_Plan_Status.md`
+- Indexer 设计范围：
+  - 边界：Indexer NOT 合约事实来源
+  - 负责：市场列表、市场历史、交易历史、用户操作历史、用户仓位快照、结算记录、claim/refund 记录、前端查询性能优化
+- 事件索引设计：
+  - Phase 1 必须索引：12 个事件（MarketCreated, LiquidityInitialized, PositionBought, PositionSold, MarketResolved, RewardClaimed, RefundClaimed, TreasuryRefundClaimed, FeeCollected, ReservesUpdated, MarketPaused, MarketUnpaused）
+  - Phase 1 暂不索引：6 个事件（FeeRouter 3 + Treasury 2 + AdminOracleResolver 1）
+  - 涉及合约：MarketFactory, BinaryPredictionMarket
+  - 已为每个事件记录触法场景、关键字段、indexed 标记、可推导业务数据、前端页面用途
+- 数据模型设计：
+  - OnchainMarket：7 张表的 Market 表，含 id/chainId/marketAddress/question/status/outcome/reserves 等
+  - OnchainPosition：用户仓位，通过事件累计推导 yesShares/noShares
+  - OnchainTrade：交易记录，包含 BUY/SELL 方向和金额
+  - OnchainFeeRecord：手续费记录
+  - OnchainResolutionRecord：结算记录
+  - OnchainClaimRecord：领取/退款记录
+  - OnchainIndexerSyncState：同步进度管理
+  - 去重策略：(chainId, txHash, logIndex)
+  - 明确数据来源限制：可直接从事件获得 vs 需链上额外读取 vs Phase 1 暂不支持
+- 技术选型比较：
+  - 比较了 4 个方案：Ponder、The Graph、Subsquid、Node.js + viem + Prisma + PostgreSQL
+  - 推荐：Node.js + viem + Prisma + PostgreSQL（最小自研 Indexer）
+  - 推荐理由：与现有技术栈一致（viem ^2.21.0, Prisma ^6.19.2, PostgreSQL）、现有 NestJS 可复用、Phase 1 仅 12 个事件复杂度可控
+  - Ponder 为备选方案
+  - The Graph / Subsquid 不推荐
+- 前端接口边界：
+  - 设计了 7 个 REST API 端点：markets、markets/:address、markets/:address/trades、users/:address/positions、users/:address/trades、users/:address/claims、sync/status
+  - 本地开发端口规划：Next.js 3000, NestJS 3001, PostgreSQL 5432
+  - Phase 1 不做 WebSocket 实时推送
+  - Phase 1 不做生产部署
+- PR-19 实现计划：
+  - 拆分为 5 个子任务：PR-19-A (Scaffold), PR-19-B (DB Schema), PR-19-C (Event Handlers), PR-19-D (Query API), PR-19-E (Smoke Test)
+  - 建议合并为 3 个 PR：Scaffold + DB Schema → Event Handlers + Query API → Smoke Test
+  - 说明合并为单个 PR 的风险：范围过大、测试依赖实时事件、可能合并冲突
+- 验证：
+  - 不修改 src/：否
+  - 不修改 contracts/：否
+  - 不修改 ABI JSON：否
+  - 不新增依赖：否
+  - 不新增数据库实现：否
+  - 不新增 Indexer 运行代码：否
+  - 不提交 .env / .trae / node_modules / .next：否
+- 状态：Stage 1 完成，等待用户确认进入 Stage 2
