@@ -8,7 +8,12 @@ This document describes the minimal local deployment preparation path for Phase 
 - Local-only deployment defaults that do not require real private keys
 - Parameterization via environment variables
 
-This is not a testnet deployment guide.
+This is not a testnet deployment guide. For the profile-level configuration and
+generic release process introduced in PR-12, also see:
+
+- `docs/deployment/deployment-config.md`
+- `docs/deployment/release-process.md`
+- `docs/deployment/verification-checklist.md`
 
 ## Files
 
