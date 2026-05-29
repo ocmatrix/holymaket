@@ -12,8 +12,10 @@
 - PR-17 Stage 4：已完成（Frontend Local Full Acceptance）
 - PR-17 docs-only：已完成（Record Frontend Minimum Integration Completion）
 - PR-CI-2 / PR-TOOL-1：已完成（GitHub CLI Automation Reliability）
-- PR-18 Stage 1：进行中（Indexer Design — 设计文档）
-- 下一推荐执行：PR-18 Stage 2（合并设计文档）或 PR-19（Indexer Implementation）
+- PR-18 Stage 1：已完成（Indexer Design — 设计文档）
+- PR-18 Stage 2：已完成（合并 Indexer 设计文档）
+- PR-19A Stage 1：本地验证中（Indexer Bootstrap）
+- 下一推荐执行：PR-19B（Database Schema）
 
 ## PR-10 最终验收记录
 
@@ -324,3 +326,32 @@
   - 不新增 Indexer 运行代码：否
   - 不提交 .env / .trae / node_modules / .next：否
 - 状态：Stage 1 完成，等待用户确认进入 Stage 2
+
+## PR-19A Stage 1 本地开发记录
+
+- PR 编号：PR-19A
+- 阶段：Stage 1
+- 名称：Indexer Bootstrap
+- 当前工作分支：`feat/pr-19a-indexer-bootstrap`
+- 范围：新增 indexer 工程骨架与 BSC Testnet 只读连通性验证
+- 边界：无数据库、无事件同步、无 API、无前端接入、无合约修改
+- 新增文件：
+  - `indexer/package.json`
+  - `indexer/tsconfig.json`
+  - `indexer/README.md`
+  - `indexer/.env.example`
+  - `indexer/src/index.ts`
+  - `indexer/src/config/chains.ts`
+  - `indexer/src/config/contracts.ts`
+  - `indexer/src/config/env.ts`
+  - `indexer/src/lib/public-client.ts`
+  - `indexer/src/lib/startup-check.ts`
+  - `docs/indexer/pr-19a-indexer-bootstrap.md`
+- 修改文件：
+  - `docs/XMarket_Phase1_PR_Plan_Status.md`
+- 技术选型：Node.js + TypeScript + viem + dotenv + tsx
+- 依赖新增：
+  - dependencies：dotenv, viem
+  - devDependencies：@types/node, tsx, typescript
+- ABI 使用：最小 ABI fragment（ammEngine + nextMarketId），PR-19A bootstrap-only
+- 状态：Stage 1 本地验证中
