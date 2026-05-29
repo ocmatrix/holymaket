@@ -5,7 +5,10 @@
 - PR-10：已完成
 - PR-CI-1：已完成
 - PR-15：已完成（ABI / SDK Export Preparation）
-- 下一推荐执行：PR-11 或 PR-12
+- PR-16：已完成（BSC Testnet Deployment + Smoke Test）
+- PR-17 Stage 1：已完成（Existing Frontend Audit + Web3 Integration Plan）
+- PR-17 Stage 2：已完成（Existing Frontend Minimum Chain Read Integration）
+- 下一推荐执行：PR-17 Stage 3 或 PR-11 / PR-12
 
 ## PR-10 最终验收记录
 
@@ -206,3 +209,50 @@
   - 不输出私钥，不提交 `.env`
   - 不提交 `contracts/cache/`、不提交 `contracts/broadcast/`
   - 不部署主网，不使用真实 USDT，仅使用 BSC Testnet mUSDT
+
+## PR-17 Stage 2 本地开发记录
+
+- PR 编号：PR-17
+- 阶段：Stage 2
+- 名称：Existing Frontend Minimum Chain Read Integration
+- 当前工作分支：`feat/pr-17-chain-read-integration`
+- 基线 commit：`604bab300f7ec9fe5304eb6fc38aacd6e0396738`
+- 新增文件：
+  - `src/lib/contracts.ts`
+  - `src/lib/contract-abis.ts`
+  - `src/hooks/use-xmarket-chain-state.ts`
+  - `docs/frontend/pr-17-chain-read-integration.md`
+- 修改文件：
+  - `src/lib/wagmi.ts`
+  - `src/components/providers/privy-wrapper.tsx`
+  - `src/components/market/c10-prediction-panel.tsx`
+  - `src/app/(dashboard)/profile/profile-content.tsx`
+  - `docs/XMarket_Phase1_PR_Plan_Status.md`
+- 复用前端边界：
+  - 未新建前端工程
+  - 未修改 `admin-web/`
+  - 未重写 UI / 路由 / 组件体系
+- BSC Testnet 配置：
+  - chainId：`97`
+  - RPC：`https://data-seed-prebsc-1-s1.bnbchain.org:8545`
+  - 默认链：BSC Testnet
+- ABI 使用：
+  - `MarketFactory` / `BinaryPredictionMarket` / `CPMMEngine` 直接来自 `packages/abi/`
+  - MockUSDT 读取使用 `viem` 标准 `erc20Abi`
+  - 未手写 ABI
+  - 未修改 ABI JSON
+- 只读读取：
+  - `factory.ammEngine()`
+  - `factory.nextMarketId()`
+  - `MockUSDT.name()`
+  - `MockUSDT.symbol()`
+  - `MockUSDT.decimals()`
+  - `MockUSDT.balanceOf(wallet)`
+- 页面展示：
+  - `src/components/market/c10-prediction-panel.tsx`
+  - `src/app/(dashboard)/profile/profile-content.tsx`
+- 本阶段边界：
+  - 不做 `buy / sell / claim`
+  - 不发送链上交易
+  - 不新增后端 API
+  - 不修改合约代码

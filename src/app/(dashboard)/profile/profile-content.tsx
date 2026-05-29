@@ -11,11 +11,13 @@ import { ReferralPanel } from "@/components/referral/referral-panel";
 import { FloatingOctopus, InkParticles, TentacleWaves } from "@/components/ui/octopus-decorations";
 import { SparklesCore } from "@/components/aceternity/sparkles";
 import { OctoProfile, OctoWallet } from "@/components/icons/octopus-icons";
+import { useXMarketChainState } from "@/hooks/use-xmarket-chain-state";
+import { XMARKET_NETWORK } from "@/lib/contracts";
 import { useBalance } from "wagmi";
 import { formatEther } from "viem";
-import { bsc } from "viem/chains";
+import { bscTestnet } from "viem/chains";
 import { usePrivy, useWallets } from "@privy-io/react-auth";
-const WALLET_DISPLAY_CHAIN_NAME = "BNB Smart Chain";
+const WALLET_DISPLAY_CHAIN_NAME = "BNB Smart Chain Testnet";
 const OctoIcons = {
     Edit: () => (<svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
       <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
@@ -156,7 +158,8 @@ export default function ProfilePageContent() {
     const activeWallet = privyWallets[0];
     const walletAddress = activeWallet?.address as `0x${string}` | undefined;
     const isWalletReady = !!activeWallet && !!walletAddress;
-    const { data: walletBalance } = useBalance({ address: walletAddress, chainId: bsc.id });
+    const { data: walletBalance } = useBalance({ address: walletAddress, chainId: bscTestnet.id });
+    const { formattedMockUsdtBalance, isConnected: isChainWalletConnected, loading: chainStateLoading, mockUsdtSymbol } = useXMarketChainState();
     const updateUsernameMutation = useMutation({
         mutationFn: (username: string) => api.updateUsername(authUser!.id, username),
         onSuccess: () => {
@@ -244,7 +247,7 @@ export default function ProfilePageContent() {
                 <p className="text-xs text-white/40">链上金库与充值/提现已移除；钱包仍可用于登录与签名。</p>
               </div>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
               <div className="bg-white/[0.03] border border-white/10 rounded-xl p-4">
                 <div className="flex items-center gap-2 mb-2">
                   <OctoIcons.Wallet />
@@ -271,6 +274,19 @@ export default function ProfilePageContent() {
                 </div>
                 <p className="text-2xl font-black text-cyan-400">{(userProfile?.pts || 0).toLocaleString()} PTS</p>
                 <p className="text-[10px] text-white/30 mt-1">{t.profile?.availableToUse || "Available"}</p>
+              </div>
+              <div className="bg-white/[0.03] border border-white/10 rounded-xl p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <OctoIcons.Wallet />
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-white/40">mUSDT on {XMARKET_NETWORK.name}</span>
+                </div>
+                {isChainWalletConnected ? (<>
+                    <p className="text-2xl font-black text-cyan-300">{formattedMockUsdtBalance || (chainStateLoading ? "Loading..." : "0")} {mockUsdtSymbol || "mUSDT"}</p>
+                    <p className="text-[10px] text-white/30 mt-1">Read-only chain state</p>
+                  </>) : (<>
+                    <p className="text-lg font-black text-white/30">-- --</p>
+                    <p className="text-[10px] text-white/30 mt-1">Connect wallet to view mUSDT balance</p>
+                  </>)}
               </div>
             </div>
             {!isWalletReady && !authUser?.address && (<div className="p-4 rounded-xl bg-cyan-500/5 border border-cyan-500/20">
