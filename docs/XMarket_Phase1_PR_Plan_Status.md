@@ -8,8 +8,11 @@
 - PR-16：已完成（BSC Testnet Deployment + Smoke Test）
 - PR-17 Stage 1：已完成（Existing Frontend Audit + Web3 Integration Plan）
 - PR-17 Stage 2：已完成（Existing Frontend Minimum Chain Read Integration）
-- PR-CI-2 / PR-TOOL-1：GitHub CLI Automation Reliability（进行中）
-- 下一推荐执行：PR-17 Stage 3 或 PR-11 / PR-12
+- PR-17 Stage 3：已完成（Frontend Minimum Write Integration）
+- PR-17 Stage 4：已完成（Frontend Local Full Acceptance）
+- PR-17 docs-only：已完成（Record Frontend Minimum Integration Completion）
+- PR-CI-2 / PR-TOOL-1：已完成（GitHub CLI Automation Reliability）
+- 下一推荐执行：PR-18 Indexer Design 或 PR-11 / PR-12
 
 ## PR-10 最终验收记录
 
