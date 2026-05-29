@@ -140,3 +140,38 @@
 - ABI / event 修改：否
 - 新增依赖：否
 - 状态：已完成并合并到 main
+
+## PR-16 Stage 1 本地开发记录
+
+- PR 编号：PR-16
+- PR 名称：Local Deployment + Market Lifecycle Verification
+- 基线 commit：d1f8a6a2faf035d1531d51f34aaa9bbde0800f92
+- 当前工作分支：`chore/pr-16-local-deployment-verification`
+- 本阶段目标：
+  - 本地 Anvil 离线部署验证
+  - Market Lifecycle Verification
+- 新增文件：
+  - `docs/deployment/local-anvil-deployment-record.md`
+  - `docs/deployment/pr-16-local-deployment-verification.md`
+- 修改文件：
+  - `docs/XMarket_Phase1_PR_Plan_Status.md`
+- 部署环境：
+  - Local Anvil (`http://127.0.0.1:8545`)
+- 生命周期验证：
+  - Factory Create Market: 成功
+  - AMM Wiring Verification: 失败 (复现 PR-11 记录的 known limitation)
+  - 交易及结算: 在 Factory 创建的市场中 revert，但在 Standalone 市场中全部通过 (Buy/Sell/Resolve/Claim)
+- 风险与限制：
+  - `MarketFactory` 合约体积超出限制（需调整 `optimizer_runs=200` 才能部署）。
+  - Factory 无法给新市场配置 `ammEngine`。
+- 本地验证结果：
+  - `forge build`: 通过
+  - `forge test --fuzz-runs 200 -vvv`: 200 passed / 0 failed / 0 skipped
+- 合约代码修改：否
+- 业务逻辑修改：否
+- ABI / event 修改：否
+- 新增依赖：否
+- 是否部署真实测试网：否
+- 是否提交真实私钥/RPC：否
+- 状态：Stage 1 完成，等待进入 Stage 2
+EOF; __tr_native_ec=$?; pwd -P >| '/var/folders/rg/2r1rs2t56jsftdgsyh7ntlbw0000gn/T/agent-toolhost/jobs/job-ff0437ca72c94600a91928d2c4eb68ff/cwd.txt'; exit "$__tr_native_ec"
