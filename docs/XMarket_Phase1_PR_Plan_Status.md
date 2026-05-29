@@ -4,8 +4,8 @@
 
 - PR-10：已完成
 - PR-CI-1：已完成
-- PR-15：Stage 1 本地开发已完成，待验收
-- 下一推荐执行：PR-15 Stage 1 验收
+- PR-15：已完成（ABI / SDK Export Preparation）
+- 下一推荐执行：PR-11 或 PR-12
 
 ## PR-10 最终验收记录
 
@@ -51,6 +51,45 @@
 - main 上全量测试结果：
   - 200 tests passed / 0 failed / 0 skipped
 - 工作区状态：clean
+
+## PR-15 最终验收记录
+
+- PR 编号：PR-15
+- PR 名称：ABI / SDK Export Preparation
+- GitHub PR：https://github.com/ocmatrix/holymaket/pull/17
+- merge 状态：MERGED
+- main 最新 commit：3c804c935eff052ad8cf9ef54070c22fafd777a2
+- 基线 commit：`95ee1ce9e263411b945366ce6215770da3476916`
+- 新增文件：
+  - `packages/abi/BinaryPredictionMarket.json`
+  - `packages/abi/MarketFactory.json`
+  - `packages/abi/CPMMEngine.json`
+  - `packages/abi/README.md`
+  - `packages/sdk/README.md`
+  - `docs/sdk/abi-export.md`
+  - `docs/sdk/open-source-modules.md`
+- 修改文件：
+  - `docs/XMarket_Phase1_PR_Plan_Status.md`
+- ABI 导出：
+  - 来源仅限 `contracts/out/` Foundry 编译产物
+  - 从 artifact JSON 提取 `abi` 字段后写入 `packages/abi/*.json`
+  - 不手写 ABI：否
+- SDK 准备边界：
+  - 未实际生成 TypeScript 类型
+  - 未新增 npm package / npm workspace
+  - 未安装 TypeChain / `ethers.js` / `viem` / `abitype`
+- 开源模块记录（仅文档预留）：
+  - 记录文档：`docs/sdk/open-source-modules.md`
+- 合约代码修改：否
+- 业务逻辑修改：否
+- ABI / event 修改：否
+- 新增依赖：否
+- CI：
+  - GitHub Actions：通过
+  - workflow run：https://github.com/ocmatrix/holymaket/actions/runs/26618070846
+- main 上回归测试：
+  - `cd contracts && ~/.foundry/bin/forge test --fuzz-runs 200 -vvv`
+  - 200 passed / 0 failed / 0 skipped
 
 ## PR-15 Stage 1 本地开发记录
 
@@ -100,4 +139,4 @@
 - 业务逻辑修改：否
 - ABI / event 修改：否
 - 新增依赖：否
-- 状态：等待用户验收后再进入 Stage 2
+- 状态：已完成并合并到 main
