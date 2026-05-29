@@ -1,6 +1,6 @@
 "use client";
 import { PrivyProvider } from '@privy-io/react-auth';
-import { mainnet, arbitrum, optimism, polygon, bsc } from 'viem/chains';
+import { mainnet, arbitrum, optimism, polygon, bscTestnet } from 'viem/chains';
 import { toSolanaWalletConnectors } from '@privy-io/react-auth/solana';
 import { Component, type ReactNode } from 'react';
 function isSecureContext(): boolean {
@@ -59,8 +59,8 @@ function PrivyProviderInner({ children }: {
                     createOnLogin: 'off',
                 },
             },
-            defaultChain: bsc,
-            supportedChains: [bsc, mainnet, arbitrum, optimism, polygon],
+            defaultChain: bscTestnet,
+            supportedChains: [bscTestnet, mainnet, arbitrum, optimism, polygon],
             externalWallets: {
                 solana: {
                     connectors: solanaConnectors,
