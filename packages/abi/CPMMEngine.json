@@ -1,0 +1,247 @@
+[
+  {
+    "type": "function",
+    "name": "getSpotPrice",
+    "inputs": [
+      {
+        "name": "rYes",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "rNo",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "pYesBps",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "pNoBps",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "pure"
+  },
+  {
+    "type": "function",
+    "name": "quoteBuyNo",
+    "inputs": [
+      {
+        "name": "collateralIn",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "rYes",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "rNo",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "feeBps",
+        "type": "uint16",
+        "internalType": "uint16"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "sharesOut",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "fee",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "newRYes",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "newRNo",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "priceImpactBps",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "pure"
+  },
+  {
+    "type": "function",
+    "name": "quoteBuyYes",
+    "inputs": [
+      {
+        "name": "collateralIn",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "rYes",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "rNo",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "feeBps",
+        "type": "uint16",
+        "internalType": "uint16"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "sharesOut",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "fee",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "newRYes",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "newRNo",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "priceImpactBps",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "pure"
+  },
+  {
+    "type": "function",
+    "name": "quoteSellNo",
+    "inputs": [
+      {
+        "name": "sharesIn",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "rYes",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "rNo",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "feeBps",
+        "type": "uint16",
+        "internalType": "uint16"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "collateralOut",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "fee",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "newRYes",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "newRNo",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "priceImpactBps",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "pure"
+  },
+  {
+    "type": "function",
+    "name": "quoteSellYes",
+    "inputs": [
+      {
+        "name": "sharesIn",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "rYes",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "rNo",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "feeBps",
+        "type": "uint16",
+        "internalType": "uint16"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "collateralOut",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "fee",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "newRYes",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "newRNo",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "priceImpactBps",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "pure"
+  }
+]
