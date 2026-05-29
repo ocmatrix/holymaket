@@ -34,6 +34,7 @@ contract CPMMEngineBuyDomainSpec is Test {
             treasury
         );
         factory.setCollateralAllowed(address(usdt), true);
+        factory.setAmmEngine(address(engine));
 
         usdt.mint(creator, 100_000_000 * 10**6);
         usdt.mint(trader, 100_000_000 * 10**6);
@@ -57,9 +58,6 @@ contract CPMMEngineBuyDomainSpec is Test {
         usdt.approve(address(factory), p.initialCollateral);
         (, address marketAddress) = factory.createMarket(p);
         market = BinaryPredictionMarket(marketAddress);
-
-        vm.prank(address(factory));
-        market.setAmmEngine(address(engine));
     }
 
     // A & B: quoteBuyYes and quoteBuyNo base domains

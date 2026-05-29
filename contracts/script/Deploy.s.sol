@@ -69,6 +69,7 @@ contract DeployScript is Script {
             c.treasury
         );
 
+        factory.setAmmEngine(address(engine));
         factory.setCollateralAllowed(address(collateralToken), true);
 
         if (c.deployStandaloneMarket) {

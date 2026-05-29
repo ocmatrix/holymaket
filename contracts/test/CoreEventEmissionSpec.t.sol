@@ -29,6 +29,7 @@ contract CoreEventEmissionSpec is Test {
             resolver, feeRouter, treasuryAddr
         );
         factory.setCollateralAllowed(address(usdt), true);
+        factory.setAmmEngine(address(engine));
 
         usdt.mint(user, 100_000_000_000);
         usdt.mint(user2, 100_000_000_000);
@@ -61,8 +62,6 @@ contract CoreEventEmissionSpec is Test {
 
         (, address marketAddress) = factory.createMarket(p);
         BinaryPredictionMarket m = BinaryPredictionMarket(marketAddress);
-        vm.prank(address(factory));
-        m.setAmmEngine(address(engine));
         return m;
     }
 

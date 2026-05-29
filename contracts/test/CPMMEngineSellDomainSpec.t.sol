@@ -498,6 +498,7 @@ contract CPMMSellExecutionDomainSpec is Test {
             treasury
         );
         factory.setCollateralAllowed(address(usdt), true);
+        factory.setAmmEngine(address(engine));
 
         usdt.mint(creator, 100_000_000_000);
         usdt.mint(user, 100_000_000_000);
@@ -521,9 +522,6 @@ contract CPMMSellExecutionDomainSpec is Test {
         usdt.approve(address(factory), p.initialCollateral);
         (, address marketAddress) = factory.createMarket(p);
         m = BinaryPredictionMarket(marketAddress);
-
-        vm.prank(address(factory));
-        m.setAmmEngine(address(engine));
     }
 
     function _fundMarketExtra(BinaryPredictionMarket m, uint256 amount) internal {

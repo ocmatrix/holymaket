@@ -35,6 +35,7 @@ contract FeeTreasuryAccountingSpec is Test {
             treasury
         );
         factory.setCollateralAllowed(address(usdt), true);
+        factory.setAmmEngine(address(engine));
 
         usdt.mint(userA, 100_000_000_000);
         usdt.mint(userB, 100_000_000_000);
@@ -60,9 +61,6 @@ contract FeeTreasuryAccountingSpec is Test {
 
         (, address marketAddress) = factory.createMarket(p);
         m = BinaryPredictionMarket(marketAddress);
-
-        vm.prank(address(factory));
-        m.setAmmEngine(address(engine));
     }
 
     function _fundMarketExtra(BinaryPredictionMarket m, uint256 amount) internal {
@@ -461,4 +459,3 @@ contract FeeTreasuryAccountingSpec is Test {
         assertGt(sweepDelta, 0);
     }
 }
-

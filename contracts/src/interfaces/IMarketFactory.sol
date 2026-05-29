@@ -57,6 +57,7 @@ interface IMarketFactory is IAccessControl, IERC165 {
     function resolver() external view returns (address);
     function feeRouter() external view returns (address);
     function treasury() external view returns (address);
+    function ammEngine() external view returns (address);
 
     function createMarket(CreateMarketParams calldata p)
         external
@@ -68,4 +69,5 @@ interface IMarketFactory is IAccessControl, IERC165 {
     function setResolver(address _resolver) external;
     function setFeeRouter(address _feeRouter) external;
     function setTreasury(address _treasury) external;
+    function setAmmEngine(address _ammEngine) external;
 }

@@ -41,6 +41,7 @@ contract Phase1InterfaceSurfaceSpec is Test {
         )));
 
         factory.setCollateralAllowed(address(usdt), true);
+        factory.setAmmEngine(address(engine));
 
         usdt.mint(creator, 50_000_000);
         usdt.mint(userYes, 50_000_000);
@@ -69,11 +70,6 @@ contract Phase1InterfaceSurfaceSpec is Test {
         address marketAddress;
         (marketId, marketAddress) = factory.createMarket(p);
         market = IBinaryPredictionMarket(marketAddress);
-
-        vm.prank(address(factory));
-        market.setAmmEngine(address(engine));
-        vm.prank(address(factory));
-        market.setMarketId(marketId);
     }
 
     function _fundMarketExtra(IBinaryPredictionMarket market, uint256 amount) internal {
