@@ -1,0 +1,182 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum MarketStatus {
+  Created
+  Open
+  Closed
+  Resolved
+  Canceled
+}
+
+enum MarketOutcome {
+  Unresolved
+  Yes
+  No
+}
+
+enum TradeSide {
+  Yes
+  No
+}
+
+enum TradeAction {
+  Buy
+  Sell
+}
+
+enum ClaimType {
+  Reward
+  Refund
+  TreasuryRefund
+}
+
+model Market {
+  id                  String           @id @default(cuid())
+  chainId             Int
+  marketId            BigInt
+  marketAddress       String
+  factoryAddress      String
+  collateralToken     String?
+  question            String?
+  status              MarketStatus     @default(Created)
+  outcome             MarketOutcome    @default(Unresolved)
+  createdBlockNumber  BigInt?
+  createdTxHash       String?
+  createdLogIndex     Int?
+  resolvedBlockNumber BigInt?
+  resolvedTxHash      String?
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
+
+  trades            Trade[]
+  positions         UserPosition[]
+  claims            Claim[]
+  reserveSnapshots  ReserveSnapshot[]
+
+  @@unique([chainId, marketAddress])
+  @@unique([chainId, marketId])
+  @@index([chainId, status])
+  @@index([chainId, outcome])
+}
+
+model Trade {
+  id               String      @id @default(cuid())
+  chainId          Int
+  marketAddress    String
+  userAddress      String
+  side             TradeSide
+  action           TradeAction
+  collateralAmount String
+  sharesAmount     String
+  feeAmount        String?
+  txHash           String
+  logIndex         Int
+  blockNumber      BigInt
+  blockTimestamp   DateTime?
+  createdAt        DateTime    @default(now())
+
+  market Market @relation(fields: [chainId, marketAddress], references: [chainId, marketAddress])
+
+  @@unique([chainId, txHash, logIndex])
+  @@index([chainId, marketAddress])
+  @@index([chainId, userAddress])
+  @@index([chainId, blockNumber])
+}
+
+model UserPosition {
+  id              String   @id @default(cuid())
+  chainId         Int
+  marketAddress   String
+  userAddress     String
+  yesShares       String   @default("0")
+  noShares        String   @default("0")
+  claimed         Boolean  @default(false)
+  refunded        Boolean  @default(false)
+  lastBlockNumber BigInt?
+  updatedAt       DateTime @updatedAt
+  createdAt       DateTime @default(now())
+
+  market Market @relation(fields: [chainId, marketAddress], references: [chainId, marketAddress])
+
+  @@unique([chainId, marketAddress, userAddress])
+  @@index([chainId, userAddress])
+  @@index([chainId, marketAddress])
+}
+
+model Claim {
+  id             String    @id @default(cuid())
+  chainId        Int
+  marketAddress  String
+  userAddress    String?
+  type           ClaimType
+  amount         String
+  txHash         String
+  logIndex       Int
+  blockNumber    BigInt
+  blockTimestamp DateTime?
+  createdAt      DateTime  @default(now())
+
+  market Market @relation(fields: [chainId, marketAddress], references: [chainId, marketAddress])
+
+  @@unique([chainId, txHash, logIndex])
+  @@index([chainId, marketAddress])
+  @@index([chainId, userAddress])
+  @@index([chainId, type])
+}
+
+model ReserveSnapshot {
+  id             String   @id @default(cuid())
+  chainId        Int
+  marketAddress  String
+  yesReserve     String
+  noReserve      String
+  blockNumber    BigInt
+  txHash         String
+  logIndex       Int
+  blockTimestamp DateTime?
+  createdAt      DateTime @default(now())
+
+  market Market @relation(fields: [chainId, marketAddress], references: [chainId, marketAddress])
+
+  @@unique([chainId, txHash, logIndex])
+  @@index([chainId, marketAddress])
+  @@index([chainId, blockNumber])
+}
+
+model IndexerState {
+  id               String   @id @default(cuid())
+  chainId          Int
+  scope            String
+  contractAddress  String?
+  lastIndexedBlock BigInt
+  updatedAt        DateTime @updatedAt
+  createdAt        DateTime @default(now())
+
+  @@unique([chainId, scope, contractAddress])
+  @@index([chainId, scope])
+}
+
+model IndexerEventLog {
+  id              String   @id @default(cuid())
+  chainId         Int
+  contractAddress String
+  eventName       String
+  txHash          String
+  logIndex        Int
+  blockNumber     BigInt
+  blockHash       String?
+  blockTimestamp  DateTime?
+  processedAt     DateTime @default(now())
+
+  @@unique([chainId, txHash, logIndex])
+  @@index([chainId, contractAddress])
+  @@index([chainId, eventName])
+  @@index([chainId, blockNumber])
+}

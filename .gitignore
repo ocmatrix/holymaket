@@ -1,5 +1,6 @@
 # Dependencies
 node_modules/
+indexer/node_modules/
 .pnp
 .pnp.js
 
@@ -27,6 +28,8 @@ yarn-error.log*
 
 # Local env files
 .env
+.env.*
+!.env.example
 .env*.local
 .env.development.local
 .env.test.local
@@ -35,6 +38,7 @@ yarn-error.log*
 
 # Server env
 server/.env
+indexer/.env
 
 # Vercel
 .vercel
@@ -48,6 +52,7 @@ server/.env
 *.swp
 *.swo
 *~
+.trae/
 
 # Prisma
 server/prisma/generated/

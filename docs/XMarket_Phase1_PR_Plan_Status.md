@@ -14,8 +14,9 @@
 - PR-CI-2 / PR-TOOL-1：已完成（GitHub CLI Automation Reliability）
 - PR-18 Stage 1：已完成（Indexer Design — 设计文档）
 - PR-18 Stage 2：已完成（合并 Indexer 设计文档）
-- PR-19A Stage 1：本地验证中（Indexer Bootstrap）
-- 下一推荐执行：PR-19B（Database Schema）
+- PR-19A：已完成（Indexer Bootstrap）
+- PR-19B Stage 1：开发中（Prisma / Database Schema）
+- 下一推荐执行：PR-19B Stage 2（合并 Database Schema）
 
 ## PR-10 最终验收记录
 
@@ -355,3 +356,36 @@
   - devDependencies：@types/node, tsx, typescript
 - ABI 使用：最小 ABI fragment（ammEngine + nextMarketId），PR-19A bootstrap-only
 - 状态：Stage 1 本地验证中
+
+## PR-19B Stage 1 本地开发记录
+
+- PR 编号：PR-19B
+- 阶段：Stage 1
+- 名称：Prisma / Database Schema
+- 当前工作分支：`feat/pr-19b-prisma-database-schema`
+- 范围：Prisma + PostgreSQL schema、migration、Prisma Client、数据库检查脚本
+- 边界：无事件同步、无业务投影、无 API、无前端接入、无合约修改
+- 新增文件：
+  - `indexer/prisma/schema.prisma`
+  - `indexer/src/lib/prisma.ts`
+  - `indexer/src/lib/db-check.ts`
+  - `docs/indexer/pr-19b-prisma-database-schema.md`
+- 修改文件：
+  - `indexer/package.json`
+  - `indexer/package-lock.json`
+  - `indexer/.env.example`
+  - `indexer/README.md`
+  - `.gitignore`
+  - `docs/XMarket_Phase1_PR_Plan_Status.md`
+- 新增依赖：
+  - dependencies：`@prisma/client`
+  - devDependencies：`prisma`
+- 数据模型：
+  - `Market`
+  - `Trade`
+  - `UserPosition`
+  - `Claim`
+  - `ReserveSnapshot`
+  - `IndexerState`
+  - `IndexerEventLog`
+- 状态：Stage 1 开发中
