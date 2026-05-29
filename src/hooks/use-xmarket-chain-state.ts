@@ -4,7 +4,7 @@ import { useMemo } from "react";
 import { useWallets } from "@privy-io/react-auth";
 import { erc20Abi, formatUnits } from "viem";
 import { useAccount, useChainId, useReadContract } from "wagmi";
-import { marketFactoryAbi } from "@/lib/contract-abis";
+import { marketFactoryAbi, binaryPredictionMarketAbi } from "@/lib/contract-abis";
 import { XMARKET_CHAIN_ID, XMARKET_CONTRACTS } from "@/lib/contracts";
 
 function formatError(error: unknown) {
@@ -70,6 +70,18 @@ export function useXMarketChainState() {
         },
     });
 
+    const { data: testMarketStatus, isLoading: loadingTestMarketStatus, error: errorTestMarketStatus } = useReadContract({
+        address: XMARKET_CONTRACTS.smokeTestMarket,
+        abi: binaryPredictionMarketAbi,
+        functionName: "status",
+    });
+
+    const { data: testMarketOutcome, isLoading: loadingTestMarketOutcome, error: errorTestMarketOutcome } = useReadContract({
+        address: XMARKET_CONTRACTS.smokeTestMarket,
+        abi: binaryPredictionMarketAbi,
+        functionName: "outcome",
+    });
+
     const error = useMemo(() => {
         return [
             factoryAmmEngineQuery.error,
@@ -78,6 +90,8 @@ export function useXMarketChainState() {
             mockUsdtSymbolQuery.error,
             mockUsdtDecimalsQuery.error,
             mockUsdtBalanceQuery.error,
+            errorTestMarketStatus,
+            errorTestMarketOutcome,
         ].map(formatError).find(Boolean);
     }, [
         factoryAmmEngineQuery.error,
@@ -86,6 +100,8 @@ export function useXMarketChainState() {
         mockUsdtSymbolQuery.error,
         mockUsdtDecimalsQuery.error,
         mockUsdtBalanceQuery.error,
+        errorTestMarketStatus,
+        errorTestMarketOutcome,
     ]);
 
     const rawMockUsdtBalance = mockUsdtBalanceQuery.data;
@@ -105,13 +121,17 @@ export function useXMarketChainState() {
         mockUsdtDecimals,
         mockUsdtBalance: rawMockUsdtBalance,
         formattedMockUsdtBalance,
+        testMarketStatus,
+        testMarketOutcome,
         isCorrectNetwork,
         loading: factoryAmmEngineQuery.isLoading ||
             factoryNextMarketIdQuery.isLoading ||
             mockUsdtNameQuery.isLoading ||
             mockUsdtSymbolQuery.isLoading ||
             mockUsdtDecimalsQuery.isLoading ||
-            mockUsdtBalanceQuery.isLoading,
+            mockUsdtBalanceQuery.isLoading ||
+            loadingTestMarketStatus ||
+            loadingTestMarketOutcome,
         error,
     };
 }
