@@ -4,7 +4,7 @@ XMarket 链下数据索引层，负责将链上合约事件转换为结构化查
 
 ## 当前状态
 
-当前 `indexer/` 已完成两个阶段的基础设施：
+当前 `indexer/` 已完成三个阶段的基础设施：
 
 - PR-19A：Bootstrap
   - 最小 Node.js + TypeScript 工程
@@ -14,13 +14,20 @@ XMarket 链下数据索引层，负责将链上合约事件转换为结构化查
   - 独立的 Prisma + PostgreSQL schema
   - Prisma Client 生成与 migration 能力
   - 基础数据库连通性检查脚本
+- PR-19C：Event Sync Engine
+  - `npm run sync` 单次串行同步入口
+  - `MarketFactory.MarketCreated` 历史扫描
+  - `IndexerEventLog` 幂等写入
+  - `IndexerState` 游标读取与推进
+  - `Market` 最小 upsert
 
 ## 当前边界
 
 当前 `indexer/` **不包含**：
 
-- 事件同步 / Event Sync Engine
-- 业务投影 / UserPosition 聚合逻辑
+- 完整 `Trade` 业务投影
+- `UserPosition` 聚合逻辑
+- `Claim / Refund` 业务处理
 - HTTP API
 - 前端接入
 - 合约修改
@@ -39,12 +46,18 @@ cp .env.example .env
 - `BSC_TESTNET_RPC_URL`
 - `INDEXER_CHAIN_ID`
 - `DATABASE_URL`
+- `INDEXER_START_BLOCK`
+- `INDEXER_CONFIRMATIONS`
+- `INDEXER_BATCH_SIZE`
+- `INDEXER_MAX_BLOCKS_PER_RUN`
 
 注意：
 
 - `DATABASE_URL` 只允许本地开发示例值
 - 不要提交真实数据库密码
 - 不要提交 `indexer/.env`
+- `INDEXER_START_BLOCK` 生产环境应配置为部署前安全块，而不是长期使用 `0`
+- 某些公共 BSC Testnet RPC 会限制 `eth_getLogs`，本地同步验证时可仅在未提交的 `.env` 中替换为支持日志查询的公共端点
 
 ## 本地数据库示例
 
@@ -81,6 +94,9 @@ npm run db:generate
 npm run db:migrate
 npm run db:check
 npm run db:studio
+
+# PR-19C event sync
+npm run sync
 ```
 
 ## 期望输出
@@ -107,6 +123,33 @@ Indexer event logs: 0
 Database check ready
 ```
 
+`npm run sync` 期望输出类似：
+
+```text
+XMarket Indexer Event Sync
+Chain ID: 97
+Factory scope: factory
+Factory state key: 0x45ab369f65c0ef44c1325323f283e6acc92b8bd0
+Factory: 0x45AB369F65c0eF44c1325323F283e6ACC92B8BD0
+Latest block: ...
+Safe to block: ...
+Start block: ...
+Batch size: 5000
+Scanning factory blocks X - Y
+Found MarketCreated: marketId=0 market=0x87445F25F78e3eeE91090C80BdeB2F1ae1296A07
+Saved IndexerEventLog: MarketCreated tx=... (inserted or skipped_duplicate)
+Upserted Market: 0x87445f25f78e3eee91090c80bdeb2f1ae1296a07
+Updated IndexerState: lastIndexedBlock=Y
+Sync completed
+```
+
+重复运行规则：
+
+- `IndexerEventLog` 依赖 `(chainId, txHash, logIndex)` 做幂等
+- 同一事件重复扫描时只会 `skipped_duplicate`，不会抛唯一约束异常
+- `IndexerState` 仅在 batch 全部写库成功后推进
+- batch 失败时不推进游标
+
 ## 目录结构
 
 ```text
@@ -125,6 +168,16 @@ indexer/
       startup-check.ts
       prisma.ts
       db-check.ts
+    abi/
+      market-factory.ts
+    sync/
+      config.ts
+      block-range.ts
+      indexer-state.ts
+      event-log.ts
+      market-discovery.ts
+      factory-sync.ts
+      index.ts
   package.json
   tsconfig.json
   .env.example
@@ -153,7 +206,6 @@ PR-19B 当前冻结的最小 Phase 1 模型：
 
 | PR | 内容 |
 |----|------|
-| PR-19C | Event Sync Engine（事件扫描、去重、写入） |
 | PR-19D | Projection / Position Aggregation |
 | PR-19E | Read API |
 | PR-19F | Frontend 接入 Indexer 数据层 |

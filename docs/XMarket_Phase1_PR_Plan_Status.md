@@ -15,8 +15,30 @@
 - PR-18 Stage 1：已完成（Indexer Design — 设计文档）
 - PR-18 Stage 2：已完成（合并 Indexer 设计文档）
 - PR-19A：已完成（Indexer Bootstrap）
-- PR-19B Stage 1：开发中（Prisma / Database Schema）
-- 下一推荐执行：PR-19B Stage 2（合并 Database Schema）
+- PR-19B：已完成（Prisma / Database Schema）
+- PR-19C Stage 1：本地验证完成（Event Sync Engine）
+- 下一推荐执行：PR-19C Stage 2（合并 Event Sync Engine）
+
+## PR-19C Stage 1 本地开发记录
+
+- PR 编号：PR-19C
+- 名称：Event Sync Engine
+- 当前工作分支：`feat/pr-19c-event-sync-engine`
+- 范围：
+  - `npm run sync`
+  - `MarketFactory.MarketCreated` 扫描
+  - `IndexerEventLog` 幂等写入
+  - `Market` 最小 upsert
+  - `IndexerState` 游标读取与推进
+- 边界：
+  - 无 `Trade` 完整业务投影
+  - 无 `UserPosition` 聚合
+  - 无 `Claim / Refund` 业务处理
+  - 无 API
+  - 无前端接入
+  - 无合约修改
+  - 无 ABI JSON 修改
+- 状态：Stage 1 本地开发完成，等待进入 Stage 2
 
 ## PR-10 最终验收记录
 
