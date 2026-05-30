@@ -4,7 +4,7 @@ XMarket 链下数据索引层，负责将链上合约事件转换为结构化查
 
 ## 当前状态
 
-当前 `indexer/` 已完成三个阶段的基础设施：
+当前 `indexer/` 已完成四个阶段的基础设施：
 
 - PR-19A：Bootstrap
   - 最小 Node.js + TypeScript 工程
@@ -20,6 +20,11 @@ XMarket 链下数据索引层，负责将链上合约事件转换为结构化查
   - `IndexerEventLog` 幂等写入
   - `IndexerState` 游标读取与推进
   - `Market` 最小 upsert
+- PR-19D：Projection / Position Aggregation + Read API
+  - `BinaryPredictionMarket` 历史事件扫描
+  - `Trade / Claim / ReserveSnapshot` 业务投影
+  - `UserPosition` 仓位聚合
+  - Fastify 只读查询 API
 
 ## 当前边界
 
@@ -28,7 +33,6 @@ XMarket 链下数据索引层，负责将链上合约事件转换为结构化查
 - 完整 `Trade` 业务投影
 - `UserPosition` 聚合逻辑
 - `Claim / Refund` 业务处理
-- HTTP API
 - 前端接入
 - 合约修改
 - ABI JSON 修改
@@ -50,6 +54,7 @@ cp .env.example .env
 - `INDEXER_CONFIRMATIONS`
 - `INDEXER_BATCH_SIZE`
 - `INDEXER_MAX_BLOCKS_PER_RUN`
+- `INDEXER_API_PORT`
 
 注意：
 
@@ -97,6 +102,9 @@ npm run db:studio
 
 # PR-19C event sync
 npm run sync
+
+# PR-19D read API
+npm run api
 ```
 
 ## 期望输出
@@ -143,12 +151,92 @@ Updated IndexerState: lastIndexedBlock=Y
 Sync completed
 ```
 
+`npm run api` 期望输出：
+
+```text
+XMarket Indexer API listening on http://localhost:4000
+```
+
 重复运行规则：
 
 - `IndexerEventLog` 依赖 `(chainId, txHash, logIndex)` 做幂等
 - 同一事件重复扫描时只会 `skipped_duplicate`，不会抛唯一约束异常
 - `IndexerState` 仅在 batch 全部写库成功后推进
 - batch 失败时不推进游标
+- `Trade / Claim / ReserveSnapshot` 依赖各自的 `(chainId, txHash, logIndex)` 做幂等
+- `UserPosition` 依赖 `(chainId, marketAddress, userAddress)` 聚合更新，不会在重复同步时重复累加
+
+## Projection 说明
+
+- `PositionBought`
+  - 写入 `Trade(action=Buy)`
+  - 根据 `side` 更新 `UserPosition.yesShares / noShares`
+- `PositionSold`
+  - 写入 `Trade(action=Sell)`
+  - 根据 `side` 扣减 `UserPosition.yesShares / noShares`
+  - 如果扣减后小于 `0`，当前 batch 失败且不推进游标
+- `MarketResolved`
+  - 更新 `Market.status / outcome`
+  - 写入 `resolvedBlockNumber / resolvedTxHash`
+- `RewardClaimed`
+  - 写入 `Claim(type=Reward)`
+  - 标记 `UserPosition.claimed = true`
+  - 将获胜一侧份额清零
+- `RefundClaimed`
+  - 写入 `Claim(type=Refund)`
+  - 标记 `UserPosition.refunded = true`
+  - 将 `yesShares / noShares` 清零
+- `TreasuryRefundClaimed`
+  - 写入 `Claim(type=TreasuryRefund)`
+  - `userAddress = null`
+- `ReservesUpdated`
+  - 写入 `ReserveSnapshot`
+
+## UserPosition 聚合规则
+
+- 所有份额和金额统一使用 `bigint` 计算，入库与 API 返回统一转为 `string`
+- 买入事件累加对应 side 的 shares
+- 卖出事件扣减对应 side 的 shares
+- `RewardClaimed` 只清零获胜 side，对应链上 `claim()` 语义
+- `RefundClaimed` 清零双边 shares，对应链上 `refund()` 语义
+- 地址统一 lower-case 入库，API 查询也先 lower-case 再检索
+
+## Read API
+
+只读 API 默认监听 `INDEXER_API_PORT`，默认端口为 `4000`。
+
+启动：
+
+```bash
+npm run api
+```
+
+路由：
+
+- `GET /health`
+- `GET /markets`
+- `GET /markets/:marketAddress`
+- `GET /markets/:marketAddress/trades`
+- `GET /users/:address/positions`
+- `GET /users/:address/trades`
+- `GET /users/:address/claims`
+
+说明：
+
+- API 仅注册 `GET`
+- 不提供 `POST / PUT / PATCH / DELETE`
+- 所有金额与 `BigInt` 字段返回 `string`
+- 所有 `DateTime` 字段返回 ISO string
+- 不暴露 `DATABASE_URL`、私钥或 RPC secret
+
+## 当前边界
+
+- 本 PR 不包含前端接入
+- 本 PR 不包含链上写交易
+- 本 PR 不包含后台管理
+- 本 PR 不包含 WebSocket / GraphQL / Redis / BullMQ
+- 本 PR 不修改 `contracts/`
+- 本 PR 不修改 `packages/abi/*.json`
 
 ## 目录结构
 
@@ -168,14 +256,34 @@ indexer/
       startup-check.ts
       prisma.ts
       db-check.ts
+      address.ts
+      bigint.ts
     abi/
       market-factory.ts
+      binary-prediction-market.ts
+    projections/
+      trade-projection.ts
+      market-projection.ts
+      claim-projection.ts
+      reserve-projection.ts
+      position-aggregation.ts
+    api/
+      index.ts
+      server.ts
+      serializers/
+        bigint.ts
+      routes/
+        health.ts
+        markets.ts
+        users.ts
     sync/
       config.ts
       block-range.ts
       indexer-state.ts
       event-log.ts
       market-discovery.ts
+      market-sync.ts
+      log-utils.ts
       factory-sync.ts
       index.ts
   package.json
@@ -206,6 +314,5 @@ PR-19B 当前冻结的最小 Phase 1 模型：
 
 | PR | 内容 |
 |----|------|
-| PR-19D | Projection / Position Aggregation |
-| PR-19E | Read API |
-| PR-19F | Frontend 接入 Indexer 数据层 |
+| PR-19D | Projection / Position Aggregation + Read API |
+| PR-19E | Frontend 接入 Indexer 数据层 |
