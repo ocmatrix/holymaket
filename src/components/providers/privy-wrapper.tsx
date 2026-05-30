@@ -48,7 +48,7 @@ function PrivyProviderInner({ children }: {
                 theme: 'dark',
                 accentColor: '#8a2be2',
                 showWalletLoginFirst: true,
-                logo: '/octopus-logo.png',
+                logo: '/prophot-logo.svg',
             },
             embeddedWallets: isSecure ? {
                 ethereum: {

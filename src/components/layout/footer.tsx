@@ -4,6 +4,7 @@ import { usePathname } from "next/navigation";
 import { useLanguageStore } from "../../stores/language-store";
 import { translations } from "../../lib/translations";
 import { useAuth } from "../../hooks/use-auth";
+import { BRAND } from "../../lib/brand";
 export function Footer() {
     const [mounted, setMounted] = useState(false);
     const { currentLanguage } = useLanguageStore();
@@ -42,7 +43,7 @@ export function Footer() {
               </div>
             </div>
             <p className="text-[8px] text-white/10 uppercase tracking-[0.2em] font-mono">
-              © 2026 Superoctop. {t.footer.rights}.
+              © 2026 {BRAND.name}. {t.footer.rights}.
             </p>
           </div>
 

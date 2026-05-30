@@ -9,6 +9,7 @@ const spaceGrotesk = Space_Grotesk({ subsets: ["latin"], variable: "--font-space
 export const metadata: Metadata = {
     title: "SUPER_TRUTH // Command Center",
     description: "Independent Operator Management System",
+    icons: { icon: "/prophot-logo.svg" },
 };
 export default function RootLayout({ children, }: Readonly<{
     children: React.ReactNode;

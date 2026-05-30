@@ -14,10 +14,11 @@ import { TopProgressBar } from "../components/layout/top-progress-bar";
 import { Toaster } from "sonner";
 import { Suspense } from "react";
 import { GlobalBackground } from "../components/layout/global-background";
+import { BRAND } from "../lib/brand";
 export const metadata: Metadata = {
-    title: "Superoctop",
+    title: BRAND.name,
     description: "Web3 Prediction Market & Data Hub",
-    icons: { icon: "/octopus-logo.png" },
+    icons: { icon: BRAND.logoPath },
 };
 export default function RootLayout({ children }: {
     children: React.ReactNode;

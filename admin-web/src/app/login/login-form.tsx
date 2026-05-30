@@ -61,7 +61,7 @@ function LoginFormInner() {
       </button>
 
       <p className="text-center text-[10px] text-white/20 mt-6">
-        Protected by Superoctop Security
+        Protected by Prophot Security
       </p>
     </form>);
 }

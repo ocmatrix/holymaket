@@ -2,6 +2,7 @@
 import React, { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import Image from "next/image";
+import { BRAND } from "../../lib/brand";
 interface WinAnimationProps {
     isVisible: boolean;
     onClose: () => void;
@@ -34,8 +35,8 @@ export function WinAnimation({ isVisible, onClose, payout = 0, result = "WIN" }:
           <motion.div initial={{ scale: 0.5, opacity: 0, y: 50 }} animate={{ scale: 1, opacity: 1, y: 0 }} exit={{ scale: 1.5, opacity: 0, y: -100 }} transition={{ type: "spring", damping: 15, stiffness: 100 }} className="relative flex flex-col items-center">
             
             <div className="relative w-64 h-64 sm:w-80 sm:h-80 drop-shadow-[0_0_30px_rgba(6,182,212,0.5)] flex items-center justify-center">
-              <img src="/image.gif" alt="Winning Octopus" className="w-full h-full object-contain mix-blend-screen scale-125" onError={(e) => {
-                (e.target as HTMLImageElement).src = '/octopus-logo.png';
+              <img src={BRAND.logoPath} alt={`${BRAND.name} Logo`} className="w-full h-full object-contain mix-blend-screen scale-125" onError={(e) => {
+                (e.target as HTMLImageElement).src = BRAND.logoPath;
                 (e.target as HTMLImageElement).className = "w-full h-full object-contain opacity-80";
             }}/>
               

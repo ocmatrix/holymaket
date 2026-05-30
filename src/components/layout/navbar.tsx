@@ -9,6 +9,7 @@ import { translations } from "../../lib/translations";
 import { useUIStore } from "../../stores/ui-store";
 import { SuperoctopLogo } from "./logo";
 import { NotificationDropdown } from "./notification-dropdown";
+import { BRAND } from "../../lib/brand";
 export function Navbar() {
     const [mounted, setMounted] = useState(false);
     const currentLanguage = useLanguageStore(s => s.currentLanguage);
@@ -51,7 +52,7 @@ export function Navbar() {
         <div className="flex-shrink-0">
           <Link href="/home" className="flex items-center gap-2 group">
             <SuperoctopLogo className="h-14 w-14 sm:h-16 sm:w-16 lg:h-20 lg:w-20 transition-transform group-hover:scale-110"/>
-            <span className="text-sm sm:text-xl font-black text-white tracking-tighter uppercase italic bg-gradient-to-r from-white via-cyan-400 to-purple-500 bg-clip-text text-transparent">Superoctop</span>
+            <span className="text-sm sm:text-xl font-black text-white tracking-tighter uppercase italic bg-gradient-to-r from-white via-cyan-400 to-purple-500 bg-clip-text text-transparent">{BRAND.name}</span>
           </Link>
         </div>
 

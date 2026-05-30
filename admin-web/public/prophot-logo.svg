@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" fill="none">
+  <title>突破 logo</title>
+  <g stroke="#39FF14" stroke-width="38" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="35" y="35" width="442" height="442" rx="48" ry="48"/>
+    <path d="M90 99 L201 210"/>
+    <path d="M207 99 L207 210 L96 210"/>
+    <path d="M422 99 L311 210"/>
+    <path d="M305 99 L305 210 L416 210"/>
+    <path d="M90 413 L201 302"/>
+    <path d="M207 413 L207 302 L96 302"/>
+    <path d="M422 413 L311 302"/>
+    <path d="M305 413 L305 302 L416 302"/>
+  </g>
+</svg>

@@ -1,10 +1,11 @@
 "use client";
 import React from "react";
+import { BRAND } from "../../lib/brand";
 export function GlobalBackground() {
     return (<div className="fixed inset-0 z-[-1] pointer-events-none overflow-hidden bg-[#050505] transform-gpu">
       
       <div className="absolute inset-0 w-full h-full opacity-[0.1] sm:opacity-[0.12]" style={{
-            backgroundImage: 'url(/image.gif)',
+            backgroundImage: `url(${BRAND.logoPath})`,
             backgroundSize: '300px',
             backgroundRepeat: 'repeat',
             backgroundPosition: 'center',

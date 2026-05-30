@@ -4,6 +4,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { useProfile } from "@/hooks/use-profile";
 import { useLanguageStore } from "@/stores/language-store";
 import { translations } from "@/lib/translations";
+import { BRAND } from "@/lib/brand";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { motion, AnimatePresence } from "framer-motion";
@@ -97,7 +98,7 @@ const OctoIcons = {
 const OctopusAvatar = ({ username }: {
     username: string;
 }) => (<div className="relative w-28 h-28 overflow-hidden rounded-2xl bg-black/20 border border-white/5">
-    <img src="/image.gif" alt="User Avatar" className="w-full h-full object-cover mix-blend-screen scale-125" style={{ filter: 'brightness(1.1) contrast(1.1) drop-shadow(0 0 10px rgba(0,242,255,0.3))' }}/>
+    <img src={BRAND.logoPath} alt="User Avatar" className="w-full h-full object-cover mix-blend-screen scale-125" style={{ filter: 'brightness(1.1) contrast(1.1) drop-shadow(0 0 10px rgba(0,242,255,0.3))' }}/>
   </div>);
 const OctoStatCard = ({ stat, index }: {
     stat: any;

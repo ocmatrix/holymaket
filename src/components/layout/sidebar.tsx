@@ -12,6 +12,7 @@ import { useQuery } from "@tanstack/react-query";
 import { api } from "../../lib/api";
 import { SuperoctopLogo } from "./logo";
 import { OctoHome, OctoMarket, OctoProfile, OctoTasks, OctoTeam, OctoLeaderboard, OctoPlayground, OctoDocs } from "../icons/octopus-icons";
+import { BRAND } from "../../lib/brand";
 const SocialIcons = {
     Google: () => (<svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
       <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
@@ -53,6 +54,8 @@ export function Sidebar() {
     useEffect(() => {
         setMounted(true);
     }, []);
+    const brandPrefix = BRAND.name.slice(0, 3);
+    const brandSuffix = BRAND.name.slice(3);
     const handleNavClick = () => {
         if (window.innerWidth < 1024) {
             setSidebarOpen(false);
@@ -95,7 +98,7 @@ export function Sidebar() {
             <SuperoctopLogo className="h-12 w-12"/>
             <div className="flex-1">
               <h2 className="text-2xl font-black tracking-[0.1em] text-white leading-none uppercase italic">
-                Super<span className="text-cyan-400">Octop</span>
+                {brandPrefix}<span className="text-cyan-400">{brandSuffix}</span>
               </h2>
               <div className="mt-1 h-0.5 w-full bg-gradient-to-r from-cyan-400 via-purple-500 to-transparent opacity-50"/>
             </div>

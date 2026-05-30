@@ -1,6 +1,7 @@
+import { BRAND } from "../../lib/brand";
 export function Hero() {
     return (<div className="max-w-3xl">
-      <p className="text-sm font-semibold tracking-[0.2em] text-neon-purple/80">Superoctop</p>
+      <p className="text-sm font-semibold tracking-[0.2em] text-neon-purple/80">{BRAND.name}</p>
       <h1 className="mt-4 text-4xl font-semibold leading-tight md:text-5xl">
         连接 Web3 与 AI 的预测市场
       </h1>

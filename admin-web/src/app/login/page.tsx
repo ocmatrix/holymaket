@@ -10,7 +10,7 @@ export default function LoginPage() {
             </svg>
           </div>
           <h1 className="text-2xl font-bold text-white">Admin Console</h1>
-          <p className="text-sm text-white/40 mt-1">Superoctop Platform Management</p>
+          <p className="text-sm text-white/40 mt-1">Prophot Platform Management</p>
         </div>
 
         <LoginForm />
