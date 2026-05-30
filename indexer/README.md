@@ -30,12 +30,11 @@ XMarket 链下数据索引层，负责将链上合约事件转换为结构化查
 
 当前 `indexer/` **不包含**：
 
-- 完整 `Trade` 业务投影
-- `UserPosition` 聚合逻辑
-- `Claim / Refund` 业务处理
-- 前端接入
-- 合约修改
-- ABI JSON 修改
+- 主网与生产发布方案（仅 Phase 1 测试网与本地验收）
+- 托管服务、扩容、监控告警、备份与容灾方案
+- WebSocket / GraphQL / Redis / BullMQ
+- 链上写交易或任何签名路径
+- 合约修改与 ABI JSON 修改
 
 ## 环境变量
 
@@ -63,6 +62,7 @@ cp .env.example .env
 - 不要提交 `indexer/.env`
 - `INDEXER_START_BLOCK` 生产环境应配置为部署前安全块，而不是长期使用 `0`
 - 某些公共 BSC Testnet RPC 会限制 `eth_getLogs`，本地同步验证时可仅在未提交的 `.env` 中替换为支持日志查询的公共端点
+- Phase 1 合约地址与网络选择当前由代码内配置固定（见 `src/config/contracts.ts`、`src/config/chains.ts`），如需切换部署/网络属于后续阶段范围
 
 ## 本地数据库示例
 
