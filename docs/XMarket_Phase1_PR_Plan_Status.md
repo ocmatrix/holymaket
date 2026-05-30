@@ -18,7 +18,36 @@
 - PR-19B：已完成（Prisma / Database Schema）
 - PR-19C Stage 1：本地验证完成（Event Sync Engine）
 - PR-19D Stage 1：本地验证完成（Projection / Position Aggregation + Read API）
-- 下一推荐执行：PR-19D Stage 2（合并 Projection / Position Aggregation + Read API）
+- PR-19E Stage 1：开发中（Frontend Indexer Data Integration）
+- 下一推荐执行：PR-19E Stage 1（前端接入 Indexer Read API 并完成本地验证）
+
+## PR-19E Stage 1 本地开发记录
+
+- PR 编号：PR-19E
+- 名称：Frontend Indexer Data Integration
+- 当前工作分支：`feat/pr-19e-frontend-indexer-integration`
+- 范围：
+  - 前端新增 Indexer client / config / hooks
+  - 前端读取 `/health`
+  - 前端读取 `/markets`
+  - 前端读取 `/markets/:marketAddress`
+  - 前端读取 `/markets/:marketAddress/trades`
+  - 前端读取 `/users/:address/positions`
+  - 前端读取 `/users/:address/trades`
+  - 前端读取 `/users/:address/claims`
+  - `profile` 展示 indexed summary
+  - `portfolio` 展示 indexed positions / trades / claims 明细
+  - `market` / `market/[id]` / `c10-prediction-panel` 展示 indexed 市场数据
+- 边界：
+  - 不改合约
+  - 不改 ABI JSON
+  - 不改 `schema.prisma`
+  - 不新增 migration
+  - 不改 Indexer projection 逻辑
+  - 不改链上交易逻辑
+- 文档：
+  - `docs/frontend/pr-19e-frontend-indexer-integration.md`
+- 状态：Stage 1 开发中
 
 ## PR-19D Stage 1 本地开发记录
 

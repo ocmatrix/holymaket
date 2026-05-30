@@ -5,9 +5,16 @@ import { translations } from "../../../lib/translations";
 import { useAuth } from "../../../hooks/use-auth";
 import { useProfile } from "../../../hooks/use-profile";
 import { api } from "../../../lib/api";
+import {
+    useIndexerUserClaims,
+    useIndexerUserPositions,
+    useIndexerUserTrades,
+} from "../../../lib/indexer/hooks";
+import { isIndexerUnavailableError } from "../../../lib/indexer/client";
 import { MarketTrend } from "../../../components/charts/market-trend";
 import { ShieldCheck, TrendingUp } from "lucide-react";
 import Link from "next/link";
+import { useWallets } from "@privy-io/react-auth";
 type ActivityItem = {
     id: string;
     type: string;
@@ -29,11 +36,17 @@ function formatActivityTime(time: string) {
         return `${Math.floor(diff / 3600000)} 小时前`;
     return d.toLocaleDateString();
 }
+function formatHash(value: string) {
+    return `${value.slice(0, 10)}...${value.slice(-8)}`;
+}
 export default function PortfolioPage() {
     const { user } = useAuth();
+    const { wallets } = useWallets();
     const { currentLanguage } = useLanguageStore();
     const t = translations[currentLanguage] || translations["en"];
     const { profile, isLoading: profileLoading } = useProfile(user?.id || "");
+    const activeWallet = wallets[0];
+    const indexerAddress = activeWallet?.address || user?.address;
     const userId = user?.id || (profile as {
         id?: string;
     })?.id;
@@ -55,6 +68,9 @@ export default function PortfolioPage() {
         enabled: !!userId,
         staleTime: 60000,
     });
+    const { data: indexedPositions, isLoading: indexedPositionsLoading, error: indexedPositionsError } = useIndexerUserPositions(indexerAddress);
+    const { data: indexedTrades, isLoading: indexedTradesLoading, error: indexedTradesError } = useIndexerUserTrades(indexerAddress);
+    const { data: indexedClaims, isLoading: indexedClaimsLoading, error: indexedClaimsError } = useIndexerUserClaims(indexerAddress);
     const activities = (recentActivityData?.activities ?? []) as ActivityItem[];
     const seasonLevel = seasonLevelData?.level ?? "—";
     const seasonRank = seasonLevelData?.rank;
@@ -65,6 +81,16 @@ export default function PortfolioPage() {
         cumulativePnl: number;
     }[];
     const totalCumulativePnl = curve.length > 0 ? curve[curve.length - 1].cumulativePnl : null;
+    const indexerUnavailable = [
+        indexedPositionsError,
+        indexedTradesError,
+        indexedClaimsError,
+    ].some(isIndexerUnavailableError);
+    const indexerError = ([
+        indexedPositionsError,
+        indexedTradesError,
+        indexedClaimsError,
+    ].filter(Boolean)[0] || null) as Error | null;
     return (<div className="relative overflow-hidden px-6 pb-24 pt-10 md:px-12 lg:px-20">
       <div className="glass rounded-3xl p-8">
         <h1 className="text-3xl font-semibold">{t.portfolio.title}</h1>
@@ -139,6 +165,84 @@ export default function PortfolioPage() {
             <p className="text-white/30 font-medium tracking-wide">
               {t.common?.noData || "暂无最新动态，快去开启你的第一场预测吧！"}
             </p>
+          </div>)}
+      </div>
+
+      <div className="mt-8 glass rounded-3xl p-8">
+        <div className="mb-6 flex items-center justify-between gap-3">
+          <div>
+            <h2 className="text-xl font-bold text-white">Indexed Portfolio Records</h2>
+            <p className="mt-2 text-sm text-white/50">Positions, trades and claims are read from the Indexer Read API.</p>
+          </div>
+          {indexerAddress && (<span className="rounded-full border border-white/10 px-3 py-1 text-[10px] font-bold uppercase tracking-widest text-white/50">
+              {indexerAddress.slice(0, 6)}...{indexerAddress.slice(-4)}
+            </span>)}
+        </div>
+
+        {!indexerAddress ? (<div className="rounded-2xl border border-white/10 bg-white/[0.02] p-6 text-center text-sm text-white/45">
+            Connect wallet to view indexed positions, trades and claims
+          </div>) : indexerUnavailable ? (<div className="rounded-2xl border border-yellow-500/20 bg-yellow-500/10 p-6 text-sm text-yellow-100">
+            <p>Indexer data unavailable</p>
+            <p className="mt-1 text-yellow-200/70">On-chain trading remains available</p>
+          </div>) : indexerError ? (<div className="rounded-2xl border border-red-500/20 bg-red-500/10 p-6 text-sm text-red-200">
+            {indexerError.message}
+          </div>) : (<div className="space-y-8">
+            <div>
+              <h3 className="text-sm font-bold uppercase tracking-widest text-white/40">Indexed Positions</h3>
+              {indexedPositionsLoading ? (<div className="mt-4 animate-pulse space-y-3">
+                  {[1, 2, 3].map((i) => (<div key={i} className="h-20 rounded-xl bg-white/5"/>))}
+                </div>) : indexedPositions && indexedPositions.length > 0 ? (<div className="mt-4 space-y-3">
+                  {indexedPositions.map((position) => (<div key={`${position.marketAddress}-${position.userAddress}`} className="rounded-2xl border border-white/10 bg-white/[0.02] p-4 text-sm text-white/70">
+                      <p className="break-all font-semibold text-white">{position.marketAddress}</p>
+                      <div className="mt-3 grid gap-2 md:grid-cols-4 text-xs">
+                        <p>YES shares: <span className="text-white">{position.yesShares}</span></p>
+                        <p>NO shares: <span className="text-white">{position.noShares}</span></p>
+                        <p>claimed: <span className="text-white">{String(position.claimed)}</span></p>
+                        <p>refunded: <span className="text-white">{String(position.refunded)}</span></p>
+                      </div>
+                    </div>))}
+                </div>) : (<p className="mt-4 text-sm text-white/40">No indexed positions yet</p>)}
+            </div>
+
+            <div>
+              <h3 className="text-sm font-bold uppercase tracking-widest text-white/40">Indexed Trades</h3>
+              {indexedTradesLoading ? (<div className="mt-4 animate-pulse space-y-3">
+                  {[1, 2, 3].map((i) => (<div key={i} className="h-24 rounded-xl bg-white/5"/>))}
+                </div>) : indexedTrades && indexedTrades.length > 0 ? (<div className="mt-4 space-y-3">
+                  {indexedTrades.map((trade) => (<div key={`${trade.txHash}-${trade.logIndex}`} className="rounded-2xl border border-white/10 bg-white/[0.02] p-4 text-sm text-white/70">
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <p className="font-semibold text-white">{trade.side} / {trade.action}</p>
+                        <p className="text-xs text-white/40">block #{trade.blockNumber}</p>
+                      </div>
+                      <div className="mt-3 grid gap-2 md:grid-cols-2 text-xs">
+                        <p className="break-all">marketAddress: <span className="text-white">{trade.marketAddress}</span></p>
+                        <p>sharesAmount: <span className="text-white">{trade.sharesAmount}</span></p>
+                        <p>collateralAmount: <span className="text-white">{trade.collateralAmount}</span></p>
+                        <p>txHash: <span className="text-white">{formatHash(trade.txHash)}</span></p>
+                      </div>
+                    </div>))}
+                </div>) : (<p className="mt-4 text-sm text-white/40">No indexed trades yet</p>)}
+            </div>
+
+            <div>
+              <h3 className="text-sm font-bold uppercase tracking-widest text-white/40">Indexed Claims</h3>
+              {indexedClaimsLoading ? (<div className="mt-4 animate-pulse space-y-3">
+                  {[1, 2, 3].map((i) => (<div key={i} className="h-24 rounded-xl bg-white/5"/>))}
+                </div>) : indexedClaims && indexedClaims.length > 0 ? (<div className="mt-4 space-y-3">
+                  {indexedClaims.map((claim) => (<div key={`${claim.txHash}-${claim.logIndex}`} className="rounded-2xl border border-white/10 bg-white/[0.02] p-4 text-sm text-white/70">
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <p className="font-semibold text-white">{claim.type}</p>
+                        <p className="text-xs text-white/40">block #{claim.blockNumber}</p>
+                      </div>
+                      <div className="mt-3 grid gap-2 md:grid-cols-2 text-xs">
+                        <p className="break-all">marketAddress: <span className="text-white">{claim.marketAddress}</span></p>
+                        <p>amount: <span className="text-white">{claim.amount}</span></p>
+                        <p>txHash: <span className="text-white">{formatHash(claim.txHash)}</span></p>
+                        <p>type: <span className="text-white">{claim.type}</span></p>
+                      </div>
+                    </div>))}
+                </div>) : (<p className="mt-4 text-sm text-white/40">No indexed claims yet</p>)}
+            </div>
           </div>)}
       </div>
     </div>);
