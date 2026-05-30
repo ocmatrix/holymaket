@@ -17,7 +17,37 @@
 - PR-19A：已完成（Indexer Bootstrap）
 - PR-19B：已完成（Prisma / Database Schema）
 - PR-19C Stage 1：本地验证完成（Event Sync Engine）
-- 下一推荐执行：PR-19C Stage 2（合并 Event Sync Engine）
+- PR-19D Stage 1：本地验证完成（Projection / Position Aggregation + Read API）
+- 下一推荐执行：PR-19D Stage 2（合并 Projection / Position Aggregation + Read API）
+
+## PR-19D Stage 1 本地开发记录
+
+- PR 编号：PR-19D
+- 名称：Projection / Position Aggregation + Read API
+- 当前工作分支：`feat/pr-19d-projection-read-api`
+- 范围：
+  - `BinaryPredictionMarket` 事件扫描
+  - `Trade / Claim / ReserveSnapshot` 投影
+  - `UserPosition` 聚合
+  - 只读 HTTP API
+- 边界：
+  - 无合约修改
+  - 无 ABI JSON 修改
+  - 无前端接入
+  - 无链上写交易
+  - 无后台管理
+- 本地验证摘要：
+  - `npm run typecheck`：通过
+  - `npm run dev`：通过
+  - `npm run db:generate`：通过
+  - `npm run db:migrate`：通过
+  - `npm run db:check`：通过
+  - `npm run sync`：通过
+  - 重复 `npm run sync`：通过，无重复插入
+  - `npm run api`：通过
+- 文档：
+  - `docs/indexer/pr-19d-projection-read-api.md`
+- 状态：Stage 1 本地开发完成，等待进入 Stage 2
 
 ## PR-19C Stage 1 本地开发记录
 

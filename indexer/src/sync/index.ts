@@ -4,6 +4,7 @@ import { prisma } from "../lib/prisma.js";
 import { publicClient } from "../lib/public-client.js";
 import { syncConfig } from "./config.js";
 import { runFactorySync } from "./factory-sync.js";
+import { runMarketSync } from "./market-sync.js";
 
 async function main(): Promise<void> {
   requireEnv("DATABASE_URL");
@@ -20,7 +21,11 @@ async function main(): Promise<void> {
     );
   }
 
-  await runFactorySync();
+  const factoryResult = await runFactorySync();
+  const marketResult = await runMarketSync();
+
+  console.log(`Factory batches: ${factoryResult.batches.length}`);
+  console.log(`Market sync entries: ${marketResult.markets.length}`);
   console.log("Sync completed");
 }
 

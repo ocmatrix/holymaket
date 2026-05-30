@@ -7,6 +7,7 @@ import { planBlockRanges } from "./block-range.js";
 import { syncConfig } from "./config.js";
 import { writeIndexerEventLogIdempotently } from "./event-log.js";
 import { getNextFactoryBlock, updateFactoryState } from "./indexer-state.js";
+import { getBlockTimestamp, requireLogField } from "./log-utils.js";
 import { upsertDiscoveredMarket } from "./market-discovery.js";
 
 interface BatchSyncResult {
@@ -24,44 +25,6 @@ export interface FactorySyncResult {
   fromBlock: bigint;
   targetToBlock: bigint | null;
   batches: BatchSyncResult[];
-}
-
-function requireLogField<T>(
-  value: T | null | undefined,
-  fieldName: string
-): T {
-  if (value === null || value === undefined) {
-    throw new Error(`MarketCreated log missing required field: ${fieldName}`);
-  }
-
-  return value;
-}
-
-function timestampToDate(timestamp: bigint): Date {
-  return new Date(Number(timestamp) * 1000);
-}
-
-async function getBlockTimestamp(
-  blockHash: string | undefined,
-  cache: Map<string, Date>
-): Promise<Date | undefined> {
-  if (blockHash === undefined) {
-    return undefined;
-  }
-
-  const normalizedBlockHash = blockHash.toLowerCase();
-  const cached = cache.get(normalizedBlockHash);
-  if (cached) {
-    return cached;
-  }
-
-  const block = await publicClient.getBlock({
-    blockHash: blockHash as `0x${string}`,
-  });
-  const timestamp = timestampToDate(block.timestamp);
-
-  cache.set(normalizedBlockHash, timestamp);
-  return timestamp;
 }
 
 export async function runFactorySync(): Promise<FactorySyncResult> {
@@ -124,13 +87,22 @@ export async function runFactorySync(): Promise<FactorySyncResult> {
       let upsertedMarkets = 0;
 
       for (const log of logs) {
-        const txHash = requireLogField(log.transactionHash, "transactionHash");
-        const logIndex = requireLogField(log.logIndex, "logIndex");
-        const blockNumber = requireLogField(log.blockNumber, "blockNumber");
-        const marketId = requireLogField(log.args.marketId, "marketId");
+        const txHash = requireLogField(
+          log.transactionHash,
+          "transactionHash",
+          "MarketCreated"
+        );
+        const logIndex = requireLogField(log.logIndex, "logIndex", "MarketCreated");
+        const blockNumber = requireLogField(
+          log.blockNumber,
+          "blockNumber",
+          "MarketCreated"
+        );
+        const marketId = requireLogField(log.args.marketId, "marketId", "MarketCreated");
         const marketAddress = requireLogField(
           log.args.marketAddress,
-          "marketAddress"
+          "marketAddress",
+          "MarketCreated"
         );
         const blockTimestamp = await getBlockTimestamp(
           log.blockHash ?? undefined,

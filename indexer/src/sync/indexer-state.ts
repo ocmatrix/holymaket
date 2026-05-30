@@ -1,6 +1,6 @@
 import type { Prisma, PrismaClient } from "@prisma/client";
 
-export async function getNextFactoryBlock(params: {
+export async function getNextIndexedBlock(params: {
   prisma: PrismaClient;
   chainId: number;
   scope: string;
@@ -22,7 +22,7 @@ export async function getNextFactoryBlock(params: {
   return state ? state.lastIndexedBlock + 1n : startBlock;
 }
 
-export async function updateFactoryState(params: {
+export async function updateIndexedState(params: {
   tx: Prisma.TransactionClient;
   chainId: number;
   scope: string;
@@ -49,4 +49,24 @@ export async function updateFactoryState(params: {
       lastIndexedBlock,
     },
   });
+}
+
+export async function getNextFactoryBlock(params: {
+  prisma: PrismaClient;
+  chainId: number;
+  scope: string;
+  contractAddress: string;
+  startBlock: bigint;
+}): Promise<bigint> {
+  return getNextIndexedBlock(params);
+}
+
+export async function updateFactoryState(params: {
+  tx: Prisma.TransactionClient;
+  chainId: number;
+  scope: string;
+  contractAddress: string;
+  lastIndexedBlock: bigint;
+}): Promise<void> {
+  await updateIndexedState(params);
 }
