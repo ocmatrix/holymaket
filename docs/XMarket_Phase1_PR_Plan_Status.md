@@ -18,8 +18,45 @@
 - PR-19B：已完成（Prisma / Database Schema）
 - PR-19C Stage 1：本地验证完成（Event Sync Engine）
 - PR-19D Stage 1：本地验证完成（Projection / Position Aggregation + Read API）
-- PR-19E Stage 1：开发中（Frontend Indexer Data Integration）
-- 下一推荐执行：PR-19E Stage 1（前端接入 Indexer Read API 并完成本地验证）
+- PR-19E Stage 1：已完成（Frontend Indexer Data Integration）
+- PR-20 Stage 1：本地验证完成（Phase 1 Final Freeze）
+- 下一推荐执行：等待用户确认进入 PR-20 Stage 2（commit/push/PR/CI）
+
+## PR-20 Stage 1 本地开发记录
+
+- PR 编号：PR-20
+- 名称：Phase 1 Final Freeze
+- 当前工作分支：`chore/pr-20-phase1-final-freeze`
+- 范围：
+  - Phase 1 最终冻结页与验收记录
+  - Phase 1 Release Notes
+  - Phase 1 Known Limitations
+  - Phase 1 Pre-deployment Checklist
+  - 关键地址与本地运行说明整理
+- 边界：
+  - 无新功能开发
+  - 不改合约业务逻辑，不改 CPMM 数学
+  - 不改 `packages/abi/*.json`
+  - 不改 `schema.prisma`，不新增 migration
+  - 不改 Indexer sync/projection/API 逻辑
+  - 不改前端交易逻辑与交易路径
+  - 不执行链上写交易，不重新部署合约
+  - 不提交 `.env` / 私钥 / RPC secret / `DATABASE_URL` 密码
+- 文档：
+  - `docs/release/phase1-final-freeze.md`
+  - `docs/release/phase1-release-notes.md`
+  - `docs/release/phase1-known-limitations.md`
+  - `docs/release/phase1-pre-deployment-checklist.md`
+- 本地验证摘要：
+  - Indexer `npm run typecheck`：通过
+  - Indexer `npm run dev`：通过
+  - Indexer `npm run db:generate` / `db:migrate` / `db:check`：通过
+  - Indexer `npm run sync`：通过（说明：官方 `data-seed-prebsc-*` RPC 存在 `eth_getLogs` limit exceeded；使用 `bsc-testnet.publicnode.com` 做增量 sync 验证，历史重扫需 full-history RPC）
+  - Indexer Read API curl：通过（/health, /markets, /market detail, /trades, /positions, /claims, CORS）
+  - Frontend `next build`：通过（存在 Reown Config 403 warning）
+  - Frontend `next dev -p 3005`：通过（curl 200，Indexer API down 时仍 200）
+  - Contracts `forge build --sizes` / `forge test --fuzz-runs 200 -vvv`：通过（204 passed / 0 failed / 0 skipped）
+- 状态：Stage 1 本地验证完成（注意：公共 RPC 可用性与历史裁剪限制）
 
 ## PR-19E Stage 1 本地开发记录
 
@@ -47,7 +84,7 @@
   - 不改链上交易逻辑
 - 文档：
   - `docs/frontend/pr-19e-frontend-indexer-integration.md`
-- 状态：Stage 1 开发中
+- 状态：已完成并合并到 main
 
 ## PR-19D Stage 1 本地开发记录
 
