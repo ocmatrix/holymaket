@@ -9,6 +9,16 @@ export async function buildApiServer(): Promise<FastifyInstance> {
     logger: false,
   });
 
+  app.addHook("onRequest", async (request, reply) => {
+    reply.header("Access-Control-Allow-Origin", "*");
+    reply.header("Access-Control-Allow-Methods", "GET,OPTIONS");
+    reply.header("Access-Control-Allow-Headers", "Content-Type");
+
+    if (request.method === "OPTIONS") {
+      return reply.code(204).send();
+    }
+  });
+
   await registerHealthRoutes(app);
   await registerMarketRoutes(app);
   await registerUserRoutes(app);

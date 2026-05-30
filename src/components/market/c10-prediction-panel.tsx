@@ -1,8 +1,17 @@
 "use client";
 
+import Link from "next/link";
+
 import { useXMarketChainState } from "@/hooks/use-xmarket-chain-state";
 import { useXMarketWrite } from "@/hooks/use-xmarket-write";
 import { XMARKET_CHAIN_ID, XMARKET_CONTRACTS, XMARKET_NETWORK } from "@/lib/contracts";
+import {
+    useIndexerHealth,
+    useIndexerMarketTrades,
+    useIndexerMarkets,
+    useIndexerUserPositions,
+} from "@/lib/indexer/hooks";
+import { isIndexerUnavailableError } from "@/lib/indexer/client";
 
 interface C10PredictionPanelProps {
     market?: {
@@ -14,6 +23,7 @@ interface C10PredictionPanelProps {
 }
 
 export function C10PredictionPanel({ market }: C10PredictionPanelProps) {
+    const smokeMarketAddress = XMARKET_CONTRACTS.smokeTestMarket.toLowerCase();
     const {
         address,
         error: readError,
@@ -41,6 +51,42 @@ export function C10PredictionPanel({ market }: C10PredictionPanelProps) {
         claim,
     } = useXMarketWrite();
 
+    const {
+        data: indexerHealth,
+        isLoading: indexerHealthLoading,
+        error: indexerHealthError,
+    } = useIndexerHealth();
+    const {
+        data: indexerMarkets,
+        isLoading: indexerMarketsLoading,
+        error: indexerMarketsError,
+    } = useIndexerMarkets();
+    const indexerMarket = indexerMarkets?.find((item) => item.marketAddress === smokeMarketAddress) || indexerMarkets?.[0];
+    const {
+        data: indexerTrades,
+        isLoading: indexerTradesLoading,
+        error: indexerTradesError,
+    } = useIndexerMarketTrades(indexerMarket?.marketAddress || smokeMarketAddress);
+    const {
+        data: indexerUserPositions,
+        isLoading: indexerUserPositionsLoading,
+        error: indexerUserPositionsError,
+    } = useIndexerUserPositions(address);
+    const currentIndexedPosition = indexerUserPositions?.find((item) => item.marketAddress === smokeMarketAddress);
+    const latestIndexedTrade = indexerTrades?.[0];
+    const indexerUnavailable = [
+        indexerHealthError,
+        indexerMarketsError,
+        indexerTradesError,
+        indexerUserPositionsError,
+    ].some(isIndexerUnavailableError);
+    const indexerErrors = [
+        indexerHealthError,
+        indexerMarketsError,
+        indexerTradesError,
+        indexerUserPositionsError,
+    ].filter(Boolean);
+
     const handleApprove = () => approveUsdt(XMARKET_CONTRACTS.mockUSDT, XMARKET_CONTRACTS.smokeTestMarket, 1000000000n);
     const handleBuyYes = () => buy(XMARKET_CONTRACTS.smokeTestMarket, 1000000n, 0n, true);
     const handleBuyNo = () => buy(XMARKET_CONTRACTS.smokeTestMarket, 1000000n, 0n, false);
@@ -49,7 +95,12 @@ export function C10PredictionPanel({ market }: C10PredictionPanelProps) {
     const handleClaim = () => claim(XMARKET_CONTRACTS.smokeTestMarket);
 
     const error = readError || (writeError ? writeError.message : undefined);
-    const isResolvedOrClosed = testMarketStatus != null && testMarketStatus >= 2;
+    const numericMarketStatus = typeof testMarketStatus === "bigint"
+        ? Number(testMarketStatus)
+        : typeof testMarketStatus === "number"
+            ? testMarketStatus
+            : -1;
+    const isResolvedOrClosed = numericMarketStatus >= 2;
     const isActionDisabled = !isConnected || !isCorrectNetwork || isPending;
     const isTradingDisabled = isActionDisabled || isResolvedOrClosed;
 
@@ -80,7 +131,7 @@ export function C10PredictionPanel({ market }: C10PredictionPanelProps) {
                 <div className="rounded-xl border border-white/10 bg-white/[0.02] p-3">
                     <p className="text-[10px] font-bold uppercase tracking-wider text-white/35">MarketFactory</p>
                     <p className="mt-2 break-all text-white/60">{XMARKET_CONTRACTS.marketFactory}</p>
-                    <p className="mt-2 text-white/55">factory.ammEngine(): <span className="break-all text-white">{factoryAmmEngine || "Loading..."}</span></p>
+                    <p className="mt-2 text-white/55">factory.ammEngine(): <span className="break-all text-white">{factoryAmmEngine != null ? String(factoryAmmEngine) : "Loading..."}</span></p>
                     <p className="mt-1 text-white/55">factory.nextMarketId(): <span className="text-white">{factoryNextMarketId != null ? String(factoryNextMarketId) : "Loading..."}</span></p>
                 </div>
 
@@ -98,6 +149,63 @@ export function C10PredictionPanel({ market }: C10PredictionPanelProps) {
                     <p className="mt-1 text-white/55">symbol: <span className="text-white">{mockUsdtSymbol || "Loading..."}</span></p>
                     <p className="mt-1 text-white/55">decimals: <span className="text-white">{mockUsdtDecimals != null ? String(mockUsdtDecimals) : "Loading..."}</span></p>
                     <p className="mt-1 text-white/55">Your mUSDT balance: <span className="text-white">{isConnected ? (formattedMockUsdtBalance || "Loading...") : "Not connected"}</span></p>
+                </div>
+
+                <div className="rounded-xl border border-white/10 bg-white/[0.02] p-3">
+                    <div className="flex items-start justify-between gap-3">
+                        <div>
+                            <p className="text-[10px] font-bold uppercase tracking-wider text-white/35">Indexer Read API</p>
+                            <p className="mt-2 text-white/55">Only display data is read from the indexer. Trading remains on-chain.</p>
+                        </div>
+                        <span className={`rounded-full border px-2 py-1 text-[10px] font-bold ${indexerUnavailable
+                                ? "border-yellow-500/20 bg-yellow-500/10 text-yellow-300"
+                                : "border-cyan-500/20 bg-cyan-500/10 text-cyan-300"}`}>
+                            {indexerHealthLoading ? "Checking" : indexerUnavailable ? "Unavailable" : (indexerHealth?.status || "Ready")}
+                        </span>
+                    </div>
+
+                    {indexerUnavailable ? (<div className="mt-3 rounded-lg border border-yellow-500/20 bg-yellow-500/10 p-3 text-xs text-yellow-100">
+                        <p>Indexer data unavailable</p>
+                        <p className="mt-1 text-yellow-200/70">On-chain trading remains available</p>
+                      </div>) : indexerErrors.length > 0 ? (<div className="mt-3 rounded-lg border border-red-500/20 bg-red-500/10 p-3 text-xs text-red-200">
+                        {(indexerErrors[0] as Error).message}
+                      </div>) : (<div className="mt-3 grid gap-3 md:grid-cols-2">
+                        <div className="rounded-lg border border-white/10 bg-black/20 p-3">
+                            <p className="text-[10px] font-bold uppercase tracking-wider text-white/35">Indexed Market</p>
+                            {indexerMarketsLoading ? (<p className="mt-2 text-xs text-white/45">Loading indexed market...</p>) : indexerMarket ? (<>
+                                <p className="mt-2 break-all text-white/70">{indexerMarket.marketAddress}</p>
+                                <p className="mt-2 text-white/55">status: <span className="text-white">{indexerMarket.status}</span></p>
+                                <p className="mt-1 text-white/55">outcome: <span className="text-white">{indexerMarket.outcome}</span></p>
+                                <p className="mt-1 text-white/55">marketId: <span className="text-white">{indexerMarket.marketId}</span></p>
+                            </>) : (<p className="mt-2 text-xs text-white/45">No indexed markets yet</p>)}
+                        </div>
+
+                        <div className="rounded-lg border border-white/10 bg-black/20 p-3">
+                            <p className="text-[10px] font-bold uppercase tracking-wider text-white/35">Indexed Trades</p>
+                            {indexerTradesLoading ? (<p className="mt-2 text-xs text-white/45">Loading indexed trades...</p>) : indexerTrades && indexerTrades.length > 0 ? (<>
+                                <p className="mt-2 text-white/55">trade count: <span className="text-white">{indexerTrades.length}</span></p>
+                                <p className="mt-1 text-white/55">latest block: <span className="text-white">{latestIndexedTrade?.blockNumber || "—"}</span></p>
+                                <p className="mt-1 text-white/55">latest tx: <span className="break-all text-white">{latestIndexedTrade?.txHash || "—"}</span></p>
+                                <p className="mt-1 text-white/55">latest data: <span className="text-white">{latestIndexedTrade?.blockTimestamp || "Indexed"}</span></p>
+                            </>) : (<p className="mt-2 text-xs text-white/45">No indexed trades yet</p>)}
+                        </div>
+                      </div>)}
+
+                    <div className="mt-3 rounded-lg border border-white/10 bg-black/20 p-3">
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-white/35">My Indexed Position</p>
+                        {!address ? (<p className="mt-2 text-xs text-white/45">Connect wallet to view indexed positions</p>) : indexerUserPositionsLoading ? (<p className="mt-2 text-xs text-white/45">Loading indexed position...</p>) : currentIndexedPosition ? (<>
+                            <p className="mt-2 text-white/55">YES shares: <span className="text-white">{currentIndexedPosition.yesShares}</span></p>
+                            <p className="mt-1 text-white/55">NO shares: <span className="text-white">{currentIndexedPosition.noShares}</span></p>
+                            <p className="mt-1 text-white/55">claimed: <span className="text-white">{String(currentIndexedPosition.claimed)}</span></p>
+                            <p className="mt-1 text-white/55">refunded: <span className="text-white">{String(currentIndexedPosition.refunded)}</span></p>
+                        </>) : (<p className="mt-2 text-xs text-white/45">No indexed position for this market yet</p>)}
+                    </div>
+
+                    <div className="mt-3 flex flex-wrap gap-2">
+                        <Link href={`/market/${smokeMarketAddress}`} className="rounded border border-cyan-500/20 bg-cyan-500/10 px-3 py-2 text-xs font-semibold text-cyan-300 hover:bg-cyan-500/20">
+                            Open Indexed Market Detail
+                        </Link>
+                    </div>
                 </div>
 
                 {market?.id && (

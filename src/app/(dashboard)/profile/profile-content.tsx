@@ -13,6 +13,12 @@ import { SparklesCore } from "@/components/aceternity/sparkles";
 import { OctoProfile, OctoWallet } from "@/components/icons/octopus-icons";
 import { useXMarketChainState } from "@/hooks/use-xmarket-chain-state";
 import { XMARKET_NETWORK } from "@/lib/contracts";
+import {
+    useIndexerUserClaims,
+    useIndexerUserPositions,
+    useIndexerUserTrades,
+} from "@/lib/indexer/hooks";
+import { isIndexerUnavailableError } from "@/lib/indexer/client";
 import { useBalance } from "wagmi";
 import { formatEther } from "viem";
 import { bscTestnet } from "viem/chains";
@@ -158,8 +164,12 @@ export default function ProfilePageContent() {
     const activeWallet = privyWallets[0];
     const walletAddress = activeWallet?.address as `0x${string}` | undefined;
     const isWalletReady = !!activeWallet && !!walletAddress;
+    const indexerAddress = walletAddress || authUser?.address;
     const { data: walletBalance } = useBalance({ address: walletAddress, chainId: bscTestnet.id });
     const { formattedMockUsdtBalance, isConnected: isChainWalletConnected, loading: chainStateLoading, mockUsdtSymbol } = useXMarketChainState();
+    const { data: indexedPositions, isLoading: indexedPositionsLoading, error: indexedPositionsError } = useIndexerUserPositions(indexerAddress);
+    const { data: indexedTrades, isLoading: indexedTradesLoading, error: indexedTradesError } = useIndexerUserTrades(indexerAddress);
+    const { data: indexedClaims, isLoading: indexedClaimsLoading, error: indexedClaimsError } = useIndexerUserClaims(indexerAddress);
     const updateUsernameMutation = useMutation({
         mutationFn: (username: string) => api.updateUsername(authUser!.id, username),
         onSuccess: () => {
@@ -177,6 +187,18 @@ export default function ProfilePageContent() {
     const googleLabel = privyUser?.google?.email || authUser?.email || notConnectedText;
     const twitterLabel = privyUser?.twitter?.username || authUser?.twitterId || notConnectedText;
     const discordLabel = privyUser?.discord?.username || authUser?.discordId || notConnectedText;
+    const activeIndexedPositions = (indexedPositions || []).filter((position) => position.yesShares !== "0" || position.noShares !== "0");
+    const highlightedPositions = activeIndexedPositions.slice(0, 3);
+    const indexerUnavailable = [
+        indexedPositionsError,
+        indexedTradesError,
+        indexedClaimsError,
+    ].some(isIndexerUnavailableError);
+    const indexedSummaryError = ([
+        indexedPositionsError,
+        indexedTradesError,
+        indexedClaimsError,
+    ].filter(Boolean)[0] || null) as Error | null;
     const connectedAccounts = [
         { type: "Wallet", label: authUser?.address ? `${authUser.address.slice(0, 6)}...${authUser.address.slice(-4)}` : notConnectedText, connected: !!authUser?.address, icon: <OctoIcons.Wallet />, action: linkWallet, linkText: linkNowText },
         { type: "Google", label: googleLabel, connected: isGoogleLinked, icon: <OctoIcons.Google />, action: linkEmail, linkText: linkNowText },
@@ -185,7 +207,7 @@ export default function ProfilePageContent() {
     ];
     const stats = [
         { label: t.profile?.points || "PTS", value: userProfile?.pts || 0, sub: t.profile?.totalPoints || "Total Points" },
-        { label: t.profile?.activePositions || "Active Positions", value: 0, sub: t.profile?.currentlyOpen || "Currently open" },
+        { label: t.profile?.activePositions || "Active Positions", value: indexerAddress ? activeIndexedPositions.length : 0, sub: indexerAddress ? "Indexed positions" : (t.profile?.currentlyOpen || "Currently open") },
         { label: t.profile?.winRate || "Win Rate", value: userProfile?.winRate ? `${(userProfile.winRate * 100).toFixed(1)}%` : "0%", sub: t.profile?.allTime || "All time" },
         { label: t.profile?.totalRoi || "Total ROI", value: userProfile?.roi ? `${userProfile.roi}%` : "0%", sub: t.profile?.return || "Return" },
     ];
@@ -295,6 +317,58 @@ export default function ProfilePageContent() {
                   {t.profile?.linkNow || 'LINK_NOW'}
                 </motion.button>
               </div>)}
+          </div>
+        </motion.div>
+
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="mb-10">
+          <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-6">
+            <div className="flex items-center gap-3 mb-6">
+              <motion.div animate={{ y: [0, -3, 0] }} transition={{ duration: 2.5, repeat: Infinity }} className="text-purple-400">
+                <OctoIcons.Position />
+              </motion.div>
+              <div>
+                <h3 className="text-xl font-black uppercase tracking-tight">
+                  Indexed <span className="text-purple-400">Summary</span>
+                </h3>
+                <p className="text-xs text-white/40">Profile summary is read from the Indexer Read API only.</p>
+              </div>
+            </div>
+
+            {!indexerAddress ? (<div className="rounded-xl border border-white/10 bg-black/20 p-4 text-sm text-white/50">
+                Connect wallet to view indexed positions, trades and claims
+              </div>) : indexerUnavailable ? (<div className="rounded-xl border border-yellow-500/20 bg-yellow-500/10 p-4 text-sm text-yellow-100">
+                <p>Indexer data unavailable</p>
+                <p className="mt-1 text-yellow-200/70">On-chain trading remains available</p>
+              </div>) : indexedSummaryError ? (<div className="rounded-xl border border-red-500/20 bg-red-500/10 p-4 text-sm text-red-200">
+                {indexedSummaryError.message}
+              </div>) : (<>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="rounded-xl border border-white/10 bg-black/20 p-4">
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-white/35">Indexed Positions</p>
+                    <p className="mt-2 text-2xl font-black text-white">{indexedPositionsLoading ? "..." : activeIndexedPositions.length}</p>
+                  </div>
+                  <div className="rounded-xl border border-white/10 bg-black/20 p-4">
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-white/35">Indexed Trades</p>
+                    <p className="mt-2 text-2xl font-black text-white">{indexedTradesLoading ? "..." : (indexedTrades?.length || 0)}</p>
+                  </div>
+                  <div className="rounded-xl border border-white/10 bg-black/20 p-4">
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-white/35">Indexed Claims</p>
+                    <p className="mt-2 text-2xl font-black text-white">{indexedClaimsLoading ? "..." : (indexedClaims?.length || 0)}</p>
+                  </div>
+                </div>
+
+                <div className="mt-4 rounded-xl border border-white/10 bg-black/20 p-4">
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-white/35">Main Holdings</p>
+                  {indexedPositionsLoading ? (<p className="mt-3 text-sm text-white/45">Loading indexed holdings...</p>) : highlightedPositions.length > 0 ? (<div className="mt-3 space-y-3">
+                      {highlightedPositions.map((position) => (<div key={`${position.marketAddress}-${position.userAddress}`} className="rounded-lg border border-white/10 bg-white/[0.02] p-3 text-xs text-white/65">
+                          <p className="break-all text-white/80">{position.marketAddress}</p>
+                          <p className="mt-2">YES shares: <span className="text-white">{position.yesShares}</span></p>
+                          <p className="mt-1">NO shares: <span className="text-white">{position.noShares}</span></p>
+                          <p className="mt-1">claimed: <span className="text-white">{String(position.claimed)}</span> · refunded: <span className="text-white">{String(position.refunded)}</span></p>
+                        </div>))}
+                    </div>) : (<p className="mt-3 text-sm text-white/45">No indexed positions yet</p>)}
+                </div>
+              </>)}
           </div>
         </motion.div>
 

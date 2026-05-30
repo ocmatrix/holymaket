@@ -1,10 +1,18 @@
 "use client";
 import React, { useState, useEffect } from "react";
 import dynamic from "next/dynamic";
+import Link from "next/link";
 import { useMarkets } from "@/hooks/use-markets";
 import { C10MarketHeader } from "@/components/market/c10-header";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
+import { XMARKET_CONTRACTS } from "@/lib/contracts";
+import { isIndexerUnavailableError } from "@/lib/indexer/client";
+import {
+    useIndexerHealth,
+    useIndexerMarkets,
+    useIndexerMarketTrades,
+} from "@/lib/indexer/hooks";
 const C10PriceChart = dynamic(() => import("@/components/market/c10-price-chart").then(mod => mod.C10PriceChart), {
     ssr: false,
     loading: () => (<div className="h-[400px] rounded-xl border border-white/5 bg-[#0a0a0a] flex items-center justify-center">
@@ -39,9 +47,37 @@ export default function C10MarketPage() {
     const [priceChange, setPriceChange] = useState(0);
     const [selectedEsportsMatchId, setSelectedEsportsMatchId] = useState<string | null>(null);
     const { markets, isLoading } = useMarkets();
+    const smokeMarketAddress = XMARKET_CONTRACTS.smokeTestMarket.toLowerCase();
     const { user: authUser } = useAuth();
     const { profile: userProfile } = useProfile(authUser?.id || "");
     const { t } = useLanguageStore();
+    const {
+        data: indexerHealth,
+        isLoading: indexerHealthLoading,
+        error: indexerHealthError,
+    } = useIndexerHealth();
+    const {
+        data: indexerMarkets,
+        isLoading: indexerMarketsLoading,
+        error: indexerMarketsError,
+    } = useIndexerMarkets();
+    const indexedMarket = indexerMarkets?.find((item) => item.marketAddress === smokeMarketAddress) || indexerMarkets?.[0];
+    const {
+        data: indexedTrades,
+        isLoading: indexedTradesLoading,
+        error: indexedTradesError,
+    } = useIndexerMarketTrades(indexedMarket?.marketAddress);
+    const indexerUnavailable = [
+        indexerHealthError,
+        indexerMarketsError,
+        indexedTradesError,
+    ].some(isIndexerUnavailableError);
+    const indexerErrors = [
+        indexerHealthError,
+        indexerMarketsError,
+        indexedTradesError,
+    ].filter(Boolean);
+    const latestIndexedTrade = indexedTrades?.[0];
     const { data: roundData } = useQuery({
         queryKey: ['currentRound', 'ESPORTS'],
         queryFn: () => api.getCurrentRound('ESPORTS'),
@@ -133,6 +169,112 @@ export default function C10MarketPage() {
       <div className="flex-1 p-3 sm:p-4 md:p-6 space-y-4 sm:space-y-6">
         
         <C10MarketHeader market={activeMarket} isLoading={isLoading}/>
+
+        <div className="rounded-2xl border border-white/10 bg-gradient-to-br from-[#0b0b0b] to-[#111111] p-4 sm:p-5">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-cyan-400/80">
+                Indexer Market Snapshot
+              </p>
+              <p className="mt-2 max-w-2xl text-xs leading-relaxed text-white/50">
+                This page reads indexed market metadata and trade history from the Indexer API.
+                Existing on-chain trading flows remain unchanged.
+              </p>
+            </div>
+            <span className={`inline-flex w-fit rounded-full border px-2 py-1 text-[10px] font-bold ${indexerUnavailable
+                ? "border-yellow-500/20 bg-yellow-500/10 text-yellow-300"
+                : "border-cyan-500/20 bg-cyan-500/10 text-cyan-300"}`}>
+              {indexerHealthLoading ? "Checking" : indexerUnavailable ? "Unavailable" : (indexerHealth?.status || "Ready")}
+            </span>
+          </div>
+
+          {indexerUnavailable ? (
+            <div className="mt-4 rounded-xl border border-yellow-500/20 bg-yellow-500/10 p-4 text-sm text-yellow-100">
+              <p>Indexer data unavailable</p>
+              <p className="mt-1 text-xs text-yellow-200/70">
+                On-chain trading remains available
+              </p>
+            </div>
+          ) : indexerErrors.length > 0 ? (
+            <div className="mt-4 rounded-xl border border-red-500/20 bg-red-500/10 p-4 text-sm text-red-200">
+              {(indexerErrors[0] as Error).message}
+            </div>
+          ) : (
+            <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+              <div className="rounded-xl border border-white/10 bg-white/[0.02] p-4">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-white/35">Health</p>
+                {indexerHealthLoading ? (
+                  <p className="mt-2 text-xs text-white/45">Checking indexer health...</p>
+                ) : indexerHealth ? (
+                  <>
+                    <p className="mt-2 text-sm font-semibold text-white">{indexerHealth.status}</p>
+                    <p className="mt-1 text-xs text-white/55">chainId: {indexerHealth.chainId}</p>
+                    <p className="mt-1 text-xs text-white/55">database: {indexerHealth.database}</p>
+                  </>
+                ) : (
+                  <p className="mt-2 text-xs text-white/45">No health payload</p>
+                )}
+              </div>
+
+              <div className="rounded-xl border border-white/10 bg-white/[0.02] p-4">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-white/35">Indexed Market</p>
+                {indexerMarketsLoading ? (
+                  <p className="mt-2 text-xs text-white/45">Loading indexed markets...</p>
+                ) : indexedMarket ? (
+                  <>
+                    <p className="mt-2 break-all text-xs text-white/70">{indexedMarket.marketAddress}</p>
+                    <p className="mt-2 text-xs text-white/55">status: <span className="text-white">{indexedMarket.status}</span></p>
+                    <p className="mt-1 text-xs text-white/55">outcome: <span className="text-white">{indexedMarket.outcome}</span></p>
+                    <p className="mt-1 text-xs text-white/55">marketId: <span className="text-white">{indexedMarket.marketId}</span></p>
+                  </>
+                ) : (
+                  <p className="mt-2 text-xs text-white/45">No indexed markets yet</p>
+                )}
+              </div>
+
+              <div className="rounded-xl border border-white/10 bg-white/[0.02] p-4">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-white/35">Trade Count</p>
+                {indexedTradesLoading ? (
+                  <p className="mt-2 text-xs text-white/45">Loading indexed trades...</p>
+                ) : indexedTrades ? (
+                  <>
+                    <p className="mt-2 text-sm font-semibold text-white">{indexedTrades.length}</p>
+                    <p className="mt-1 text-xs text-white/55">
+                      latest block: <span className="text-white">{latestIndexedTrade?.blockNumber || "—"}</span>
+                    </p>
+                    <p className="mt-1 text-xs text-white/55">
+                      latest indexed: <span className="text-white">{latestIndexedTrade?.blockTimestamp || "No timestamp"}</span>
+                    </p>
+                  </>
+                ) : (
+                  <p className="mt-2 text-xs text-white/45">No indexed trades yet</p>
+                )}
+              </div>
+
+              <div className="rounded-xl border border-white/10 bg-white/[0.02] p-4">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-white/35">Data Availability</p>
+                {indexedMarket ? (
+                  <>
+                    <p className="mt-2 text-sm font-semibold text-white">
+                      {indexedTrades && indexedTrades.length > 0 ? "Trades Indexed" : "Metadata Only"}
+                    </p>
+                    <p className="mt-1 text-xs text-white/55">
+                      current tab: <span className="text-white">{activeTab}</span>
+                    </p>
+                    <Link
+                      href={`/market/${indexedMarket.marketAddress}`}
+                      className="mt-3 inline-flex rounded border border-cyan-500/20 bg-cyan-500/10 px-3 py-2 text-xs font-semibold text-cyan-300 transition hover:bg-cyan-500/20"
+                    >
+                      Open indexed detail
+                    </Link>
+                  </>
+                ) : (
+                  <p className="mt-2 text-xs text-white/45">Indexer has not indexed a market yet</p>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
 
         
         <div className="grid grid-cols-2 md:flex md:items-center gap-2 sm:gap-3 select-none">
