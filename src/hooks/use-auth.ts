@@ -58,7 +58,7 @@ axios.interceptors.response.use((response) => response, async (error) => {
     return Promise.reject(error);
 });
 export function useAuth() {
-    const { ready, authenticated, user: privyUser, login: privyLogin, logout: privyLogout, linkWallet: privyLinkWallet, linkTwitter: privyLinkTwitter, linkDiscord: privyLinkDiscord, linkEmail: privyLinkEmail } = usePrivy();
+    const { ready, authenticated, user: privyUser, login: privyLogin, logout: privyLogout, linkWallet: privyLinkWallet, linkTwitter: privyLinkTwitter, linkDiscord: privyLinkDiscord, linkEmail: privyLinkEmail, getAccessToken } = usePrivy();
     const { wallets } = useWallets();
     const dbUser = useAuthStore(s => s.user);
     const setStatus = useAuthStore(s => s.setStatus);
@@ -76,17 +76,12 @@ export function useAuth() {
             syncingRef.current = true;
             if (!isReconnect)
                 setStatus('loading');
-            const address = privyUser.wallet?.address || null;
-            const email = privyUser.email?.address || privyUser.google?.email || null;
-            const twitterId = privyUser.twitter?.username || null;
-            const discordId = privyUser.discord?.username || null;
             const referrerCode = localStorage.getItem('referrerCode');
+            const privyToken = await getAccessToken();
+            if (!privyToken)
+                throw new Error('Privy access token unavailable');
             const { data } = await axios.post(`${API_BASE}/auth/verify-privy`, {
-                privyId: privyUser.id,
-                address,
-                email,
-                twitterId,
-                discordId,
+                privyToken,
                 referrerCode
             });
             if (data.accessToken || data.token) {
@@ -111,7 +106,7 @@ export function useAuth() {
         finally {
             syncingRef.current = false;
         }
-    }, [privyUser, setUser, setToken, setStatus, showNotification, t]);
+    }, [privyUser, getAccessToken, setUser, setToken, setStatus, showNotification, t]);
     useEffect(() => {
         const savedToken = localStorage.getItem('auth_token');
         if (savedToken) {

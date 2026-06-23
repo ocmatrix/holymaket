@@ -1,19 +1,24 @@
-import { Controller, Get, Put, Post, Param, Body, Query, BadRequestException } from '@nestjs/common';
+import { Controller, Get, Put, Param, Body, Query, BadRequestException, UseGuards } from '@nestjs/common';
 import { PrismaService } from '../prisma.service';
 import { ApiTags, ApiOperation, ApiBody } from '@nestjs/swagger';
 import { EventsGateway } from '../events/events.gateway';
 import { QuestService } from '../quest/quest.service';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { JwtPayload } from '../auth/jwt.service';
 @ApiTags('user')
 @Controller('user')
 export class UserController {
     constructor(private readonly prisma: PrismaService, private readonly eventsGateway: EventsGateway, private readonly questService: QuestService) { }
     @Get(':id/recent-activity')
+    @UseGuards(JwtAuthGuard)
     @ApiOperation({ summary: '获取用户最近活动（下注/持仓/结算等）' })
     async getRecentActivity(
-    @Param('id')
-    id: string, 
+    @CurrentUser()
+    currentUser: JwtPayload,
     @Query('limit')
     limit: string = '10') {
+        const id = currentUser.sub;
         const take = Math.min(parseInt(limit, 10) || 10, 50);
         const [bets, positions, esportsBets, footballBets] = await Promise.all([
             this.prisma.bet.findMany({
@@ -98,10 +103,12 @@ export class UserController {
         return { success: true, activities: items.slice(0, take) };
     }
     @Get(':id/season-level')
+    @UseGuards(JwtAuthGuard)
     @ApiOperation({ summary: '获取用户当前赛季等级/排名' })
     async getSeasonLevel(
-    @Param('id')
-    id: string) {
+    @CurrentUser()
+    currentUser: JwtPayload) {
+        const id = currentUser.sub;
         const activeSeason = await this.prisma.season.findFirst({
             where: { status: 'ACTIVE' },
             orderBy: { startDate: 'desc' },
@@ -151,12 +158,14 @@ export class UserController {
         };
     }
     @Get(':id/profit-curve')
+    @UseGuards(JwtAuthGuard)
     @ApiOperation({ summary: '获取用户收益曲线（按日汇总 PnL）' })
     async getProfitCurve(
-    @Param('id')
-    id: string, 
+    @CurrentUser()
+    currentUser: JwtPayload,
     @Query('days')
     days: string = '30') {
+        const id = currentUser.sub;
         const dayCount = Math.min(parseInt(days, 10) || 30, 90);
         const since = new Date();
         since.setDate(since.getDate() - dayCount);
@@ -203,15 +212,17 @@ export class UserController {
         return { success: true, curve };
     }
     @Put(':id/username')
+    @UseGuards(JwtAuthGuard)
     @ApiOperation({ summary: '更新用户名' })
     @ApiBody({ schema: { type: 'object', properties: { username: { type: 'string' } } } })
     async updateUsername(
-    @Param('id')
-    id: string, 
+    @CurrentUser()
+    currentUser: JwtPayload,
     @Body()
     body: {
         username: string;
     }) {
+        const id = currentUser.sub;
         if (!body.username || body.username.trim().length < 2) {
             throw new BadRequestException('Username must be at least 2 characters');
         }
@@ -234,10 +245,12 @@ export class UserController {
         return { success: true, username: updated.username };
     }
     @Get(':id/profile')
+    @UseGuards(JwtAuthGuard)
     @ApiOperation({ summary: '获取用户资料及余额' })
     async getProfile(
-    @Param('id')
-    id: string) {
+    @CurrentUser()
+    currentUser: JwtPayload) {
+        const id = currentUser.sub;
         const user = await this.prisma.user.findUnique({
             where: { id },
             include: {
@@ -250,11 +263,7 @@ export class UserController {
             }
         });
         if (!user) {
-            return this.prisma.user.upsert({
-                where: { id },
-                update: {},
-                create: { id, address: `0x${Math.random().toString(16).slice(2, 10)}`, pts: 1000 }
-            });
+            throw new BadRequestException('User not found');
         }
         const actualWins = await this.prisma.battle.count({
             where: { userId: id, winner: 'USER' }

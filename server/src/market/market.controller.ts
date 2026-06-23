@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Param, Query } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Query, UseGuards } from '@nestjs/common';
 import { MarketService } from './market.service';
 import { IndexService } from './index.service';
 import { BacktestService } from './backtest.service';
@@ -6,6 +6,10 @@ import { MarketCalendarService } from './market-calendar.service';
 import { AIService } from '../ai/ai.service';
 import { MarketOutcome } from '@prisma/client';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { AdminTokenGuard } from '../auth/guards/admin-token.guard';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { JwtPayload } from '../auth/jwt.service';
 @ApiTags('market')
 @Controller('market')
 export class MarketController {
@@ -51,6 +55,7 @@ export class MarketController {
         return this.indexService.getGoldComponents();
     }
     @Post('index/reset')
+    @UseGuards(AdminTokenGuard)
     @ApiOperation({ summary: '重置指数历史数据' })
     resetIndexHistory() {
         return this.indexService.resetHistory();
@@ -93,17 +98,19 @@ export class MarketController {
         return this.marketService.findRecentBets(marketId, Number(limit));
     }
     @Post(':id/bet')
+    @UseGuards(JwtAuthGuard)
     @ApiOperation({ summary: '下注' })
     placeBet(
     @Param('id')
     marketId: string, 
+    @CurrentUser()
+    currentUser: JwtPayload,
     @Body()
     body: {
-        userId: string;
         position: MarketOutcome;
         amount: number;
     }) {
-        return this.marketService.placeBet(marketId, body.userId, body.position, body.amount);
+        return this.marketService.placeBet(marketId, currentUser.sub, body.position, body.amount);
     }
     @Get(':id/ai-analysis')
     @ApiOperation({ summary: '获取 AI 行情建议 (RAG 增强)' })

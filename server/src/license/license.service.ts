@@ -20,7 +20,10 @@ export class LicenseService implements OnModuleInit {
     private heartbeatInterval: NodeJS.Timeout | null = null;
     async onModuleInit() {
         if (!this.LICENSE_KEY) {
-            this.logger.warn('⚠️ No LICENSE_KEY configured, running in development mode');
+            if (process.env.NODE_ENV === 'production') {
+                throw new Error('LICENSE_KEY must be configured in production');
+            }
+            this.logger.warn('No LICENSE_KEY configured, running in development mode');
             this.isLicensed = true;
             return;
         }

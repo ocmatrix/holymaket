@@ -1,14 +1,18 @@
-import axios from "axios";
+import axios, { type AxiosInstance, type AxiosRequestConfig } from "axios";
 const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
-const LEGACY_ADMIN_TOKEN = process.env.NEXT_PUBLIC_ADMIN_TOKEN || "";
+type DataAxiosInstance = Omit<AxiosInstance, "get" | "post" | "put" | "delete"> & {
+    get<T = any>(url: string, config?: AxiosRequestConfig): Promise<T>;
+    post<T = any>(url: string, data?: unknown, config?: AxiosRequestConfig): Promise<T>;
+    put<T = any>(url: string, data?: unknown, config?: AxiosRequestConfig): Promise<T>;
+    delete<T = any>(url: string, config?: AxiosRequestConfig): Promise<T>;
+};
 export const adminApi = axios.create({
     baseURL: BACKEND_URL,
     headers: {
         "Content-Type": "application/json",
-        ...(LEGACY_ADMIN_TOKEN ? { "x-admin-token": LEGACY_ADMIN_TOKEN } : {}),
     },
     withCredentials: true,
-});
+}) as DataAxiosInstance;
 adminApi.interceptors.response.use((response) => response.data, (error) => {
     if (error.response?.status === 401 && typeof window !== "undefined") {
         const currentPath = window.location.pathname;

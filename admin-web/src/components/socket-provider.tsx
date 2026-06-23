@@ -21,7 +21,7 @@ export function SocketProvider({ children }: {
     useEffect(() => {
         console.log('[Admin Socket] Connecting to:', WS_URL);
         const socketInstance = io(WS_URL, {
-            query: { userId: 'super-admin' },
+            withCredentials: true,
             autoConnect: true,
             reconnection: true,
             reconnectionDelay: 1000,

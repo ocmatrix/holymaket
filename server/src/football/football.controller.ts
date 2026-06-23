@@ -1,5 +1,9 @@
-import { Controller, Get, Post, Body, Query, Param } from '@nestjs/common';
+import { Controller, Get, Post, Body, Query, Param, UseGuards } from '@nestjs/common';
 import { FootballService } from './football.service';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { AdminTokenGuard } from '../auth/guards/admin-token.guard';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { JwtPayload } from '../auth/jwt.service';
 @Controller('api/football')
 export class FootballController {
     constructor(private readonly footballService: FootballService) { }
@@ -61,17 +65,20 @@ export class FootballController {
         };
     }
     @Post('bet')
+    @UseGuards(JwtAuthGuard)
     async placeBet(
+    @CurrentUser()
+    currentUser: JwtPayload,
     @Body()
     body: {
-        userId: string;
         matchId: string;
         prediction: 'HOME' | 'DRAW' | 'AWAY';
         amount: number;
     }) {
-        return this.footballService.placeBet(body);
+        return this.footballService.placeBet({ ...body, userId: currentUser.sub });
     }
     @Get('sync')
+    @UseGuards(AdminTokenGuard)
     async syncMatches() {
         await this.footballService.syncMatches();
         return {
@@ -80,6 +87,7 @@ export class FootballController {
         };
     }
     @Post('init-mock')
+    @UseGuards(AdminTokenGuard)
     async initMockMatches() {
         const result = await this.footballService.initMockMatches();
         return {

@@ -1,22 +1,88 @@
 import { WebSocketGateway, WebSocketServer, SubscribeMessage, OnGatewayConnection, OnGatewayDisconnect, } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
 import { Logger } from '@nestjs/common';
+import { JwtService } from '../auth/jwt.service';
+import * as jwt from 'jsonwebtoken';
+
+const socketCorsOrigins = (process.env.CORS_ORIGINS || '')
+    .split(',')
+    .map(origin => origin.trim())
+    .filter(Boolean);
+
 @WebSocketGateway({
     cors: {
-        origin: '*',
+        origin: process.env.NODE_ENV === 'production'
+            ? socketCorsOrigins
+            : (socketCorsOrigins.length > 0 ? socketCorsOrigins : ['http://localhost:3000', 'http://localhost:3001', 'http://localhost:3002', 'http://localhost:3003', 'http://localhost:3004', 'http://localhost:3005']),
+        credentials: true,
     },
 })
 export class EventsGateway implements OnGatewayConnection, OnGatewayDisconnect {
     @WebSocketServer()
     server: Server;
     private logger: Logger = new Logger('EventsGateway');
+    private readonly jwtService = new JwtService();
     private onlineUsers: Map<string, string> = new Map();
     handleConnection(client: Socket) {
-        const userId = client.handshake.query.userId as string;
-        if (userId && userId !== 'guest') {
-            this.onlineUsers.set(userId, client.id);
-            client.join(userId);
-            this.logger.log(`User connected: ${userId} (Socket: ${client.id})`);
+        const token = this.getHandshakeToken(client);
+        if (!token) {
+            const admin = this.verifyAdminCookie(client);
+            if (admin) {
+                client.data.admin = admin;
+                this.logger.log(`Admin connected: ${admin.adminId} (Socket: ${client.id})`);
+                return;
+            }
+            this.logger.warn(`Socket rejected without token: ${client.id}`);
+            client.disconnect(true);
+            return;
+        }
+        try {
+            const payload = this.jwtService.verifyAccessToken(token);
+            client.data.user = payload;
+            this.onlineUsers.set(payload.sub, client.id);
+            client.join(payload.sub);
+            this.logger.log(`User connected: ${payload.sub} (Socket: ${client.id})`);
+        }
+        catch {
+            this.logger.warn(`Socket rejected with invalid token: ${client.id}`);
+            client.disconnect(true);
+        }
+    }
+    private getHandshakeToken(client: Socket): string | null {
+        const authToken = client.handshake.auth?.token;
+        if (typeof authToken === 'string' && authToken) {
+            return authToken;
+        }
+        const queryToken = client.handshake.query.token;
+        if (typeof queryToken === 'string' && queryToken) {
+            return queryToken;
+        }
+        const header = client.handshake.headers.authorization;
+        if (typeof header === 'string' && header.startsWith('Bearer ')) {
+            return header.slice(7);
+        }
+        return null;
+    }
+    private verifyAdminCookie(client: Socket): any | null {
+        const secret = process.env.ADMIN_JWT_SECRET || process.env.JWT_SECRET;
+        const cookieHeader = client.handshake.headers.cookie;
+        if (!secret || typeof cookieHeader !== 'string') {
+            return null;
+        }
+        const adminToken = cookieHeader
+            .split(';')
+            .map(part => part.trim())
+            .find(part => part.startsWith('admin-session='))
+            ?.slice('admin-session='.length);
+        if (!adminToken) {
+            return null;
+        }
+        try {
+            const payload = jwt.verify(decodeURIComponent(adminToken), secret) as any;
+            return payload?.adminId ? payload : null;
+        }
+        catch {
+            return null;
         }
     }
     handleDisconnect(client: Socket) {
@@ -30,34 +96,36 @@ export class EventsGateway implements OnGatewayConnection, OnGatewayDisconnect {
     }
     @SubscribeMessage('authenticate')
     handleAuthenticate(client: Socket, data: {
-        userId: string;
+        token?: string;
     }) {
-        if (!data?.userId)
+        if (!data?.token)
             return;
+        const payload = this.jwtService.verifyAccessToken(data.token);
         for (const [uid, sid] of this.onlineUsers.entries()) {
             if (sid === client.id) {
                 this.onlineUsers.delete(uid);
                 break;
             }
         }
-        this.onlineUsers.set(data.userId, client.id);
-        client.join(data.userId);
-        this.logger.log(`User authenticated: ${data.userId} (Socket: ${client.id})`);
+        client.data.user = payload;
+        this.onlineUsers.set(payload.sub, client.id);
+        client.join(payload.sub);
+        this.logger.log(`User authenticated: ${payload.sub} (Socket: ${client.id})`);
     }
     getOnlineUserIds(): string[] {
         return Array.from(this.onlineUsers.keys()).filter(id => id !== 'guest');
     }
     emitTaskUpdate(userId: string, task: any) {
-        this.server.emit(`taskUpdate:${userId}`, task);
+        this.server.to(userId).emit('taskUpdate', task);
     }
     emitBetSuccess(userId: string, bet: any) {
-        this.server.emit(`betSuccess:${userId}`, bet);
+        this.server.to(userId).emit('betSuccess', bet);
     }
     emitBattleResult(userId: string, battle: any) {
-        this.server.emit(`battleResult:${userId}`, battle);
+        this.server.to(userId).emit('battleResult', battle);
     }
     emitBalanceUpdate(userId: string, pts: number) {
-        this.server.emit(`balanceUpdate:${userId}`, pts);
+        this.server.to(userId).emit('balanceUpdate', pts);
     }
     broadcastSystemMessage(type: string, message: string) {
         this.server.emit('systemBroadcast', { type, message, timestamp: new Date() });
@@ -112,7 +180,7 @@ export class EventsGateway implements OnGatewayConnection, OnGatewayDisconnect {
         newCombo: number;
         newMultiplier: number;
     }) {
-        this.server.emit(`betResult:${userId}`, result);
+        this.server.to(userId).emit('betResult', result);
     }
     emitMatchLiveUpdate(liveUpdate: {
         matchId: string;

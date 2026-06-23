@@ -1,6 +1,7 @@
-import { Controller, Get, Post, Param, Body } from '@nestjs/common';
+import { Controller, Get, Post, Param, Body, UseGuards } from '@nestjs/common';
 import { FootballLiveService } from './football-live.service';
 import { FootballEvent } from './types/football-live.types';
+import { AdminTokenGuard } from '../auth/guards/admin-token.guard';
 @Controller('api/football/live')
 export class FootballLiveController {
     constructor(private readonly footballLiveService: FootballLiveService) { }
@@ -27,6 +28,7 @@ export class FootballLiveController {
         };
     }
     @Post('matches/:matchId/register')
+    @UseGuards(AdminTokenGuard)
     registerLiveMatch(
     @Param('matchId')
     matchId: string) {
@@ -37,6 +39,7 @@ export class FootballLiveController {
         };
     }
     @Post('matches/:matchId/unregister')
+    @UseGuards(AdminTokenGuard)
     unregisterLiveMatch(
     @Param('matchId')
     matchId: string) {
@@ -58,6 +61,7 @@ export class FootballLiveController {
         };
     }
     @Post('matches/:matchId/events')
+    @UseGuards(AdminTokenGuard)
     addEvent(
     @Param('matchId')
     matchId: string, 
@@ -90,6 +94,7 @@ export class FootballLiveController {
         };
     }
     @Post('matches/:matchId/events/clear')
+    @UseGuards(AdminTokenGuard)
     clearMatchEvents(
     @Param('matchId')
     matchId: string) {

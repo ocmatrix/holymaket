@@ -79,8 +79,13 @@ export function useFootballLive(callbacks?: FootballLiveHookCallbacks) {
     useEffect(() => {
         const wsUrl = process.env.NEXT_PUBLIC_WS_URL || 'http://localhost:3001';
         if (!socketRef.current) {
+            const token = localStorage.getItem('auth_token');
+            if (!token) {
+                callbacksRef.current?.onError?.('Authentication required');
+                return;
+            }
             const socket = io(wsUrl, {
-                query: { userId: 'football-viewer' },
+                auth: { token },
                 reconnection: true,
                 reconnectionDelay: 1000,
                 reconnectionDelayMax: 10000,
@@ -149,10 +154,12 @@ export function getFootballSocket(): Socket | null {
 export function connectFootballSocket() {
     if (!globalSocket || !globalSocket.connected) {
         const wsUrl = process.env.NEXT_PUBLIC_WS_URL || 'http://localhost:3001';
+        const token = localStorage.getItem('auth_token');
+        if (!token) {
+            return null;
+        }
         globalSocket = io(wsUrl, {
-            query: {
-                userId: 'football-viewer',
-            },
+            auth: { token },
             reconnection: true,
             reconnectionDelay: 1000,
             reconnectionDelayMax: 5000,

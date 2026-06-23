@@ -70,7 +70,9 @@ export class AdminAuthController {
     async me(
     @Req()
     req: Request) {
-        const token = req.cookies?.['admin-session'] || req.headers['x-admin-token'];
+        const authHeader = req.headers['authorization'];
+        const bearerToken = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : undefined;
+        const token = req.cookies?.['admin-session'] || bearerToken;
         if (!token) {
             throw new UnauthorizedException('Not authenticated');
         }

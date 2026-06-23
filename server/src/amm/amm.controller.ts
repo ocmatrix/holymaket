@@ -1,7 +1,10 @@
-import { Controller, Get, Post, Body, Param, Query } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Query, UseGuards } from '@nestjs/common';
 import { PositionSide } from '@prisma/client';
 import { AMMService } from './amm.service';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { JwtPayload } from '../auth/jwt.service';
 
 @ApiTags('amm')
 @Controller('amm')
@@ -38,11 +41,12 @@ export class AMMController {
     }
 
     @Post('buy')
+    @UseGuards(JwtAuthGuard)
     @ApiOperation({ summary: '执行买入' })
     buy(
+        @CurrentUser() currentUser: JwtPayload,
         @Body()
         body: {
-            userId: string;
             roundId: string;
             side: 'YES' | 'NO';
             amount: number;
@@ -50,18 +54,19 @@ export class AMMController {
     ) {
         return this.ammService.executeBuy(
             body.roundId,
-            body.userId,
+            currentUser.sub,
             body.side as PositionSide,
             body.amount,
         );
     }
 
     @Post('sell')
+    @UseGuards(JwtAuthGuard)
     @ApiOperation({ summary: '执行卖出' })
     sell(
+        @CurrentUser() currentUser: JwtPayload,
         @Body()
         body: {
-            userId: string;
             roundId: string;
             side: 'YES' | 'NO';
             shares: number;
@@ -69,19 +74,20 @@ export class AMMController {
     ) {
         return this.ammService.executeSell(
             body.roundId,
-            body.userId,
+            currentUser.sub,
             body.side as PositionSide,
             body.shares,
         );
     }
 
     @Get('positions/:userId')
+    @UseGuards(JwtAuthGuard)
     @ApiOperation({ summary: '用户持仓' })
     getPositions(
-        @Param('userId') userId: string,
+        @CurrentUser() currentUser: JwtPayload,
         @Query('roundId') roundId?: string,
     ) {
-        return this.ammService.getUserPositions(userId, roundId);
+        return this.ammService.getUserPositions(currentUser.sub, roundId);
     }
 
     @Get('trades/:roundId')
