@@ -28,7 +28,18 @@ export class SeasonService {
         });
         return rankings.map((r, index) => ({
             rank: index + 1,
-            ...r
+            totalBattles: r.totalBattles,
+            wins: r.wins,
+            losses: r.losses,
+            draws: r.draws,
+            winRate: r.winRate,
+            totalPts: r.totalPts,
+            rewardAmount: r.rewardAmount,
+            rewardClaimed: r.rewardClaimed,
+            user: {
+                username: r.user?.username,
+                address: r.user?.address
+            }
         }));
     }
     async updateSeasonRanking(userId: string, seasonId: string, isWin: boolean, ptsChange: number) {

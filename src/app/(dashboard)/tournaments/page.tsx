@@ -96,8 +96,18 @@ export default function TournamentsPage() {
         queryFn: () => api.getTournamentLeaderboard(selectedTournament.id),
         enabled: !!selectedTournament?.id,
     });
+    const isCurrentTournamentUser = (entry: any) => {
+        const authAddress = authUser?.address?.toLowerCase();
+        const entryAddress = entry?.user?.address?.toLowerCase();
+        if (authAddress && entryAddress) {
+            return authAddress === entryAddress;
+        }
+        const authUsername = authUser?.username?.toLowerCase();
+        const entryUsername = entry?.user?.username?.toLowerCase();
+        return !!authUsername && !!entryUsername && authUsername === entryUsername;
+    };
     const joinMutation = useMutation({
-        mutationFn: (tournamentId: string) => api.joinTournament(tournamentId, authUser!.id),
+        mutationFn: (tournamentId: string) => api.joinTournament(tournamentId),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ["tournaments"] });
         },
@@ -186,7 +196,7 @@ export default function TournamentsPage() {
           </div>) : filteredTournaments?.length > 0 ? (<div className="grid gap-4 md:grid-cols-2">
             {filteredTournaments.map((tournament: any) => {
                 const rewards = parseJson(tournament.rewards);
-                const isParticipant = tournament.participants?.some((p: any) => p.userId === authUser?.id);
+                const isParticipant = tournament.participants?.some((p: any) => isCurrentTournamentUser(p));
                 return (<motion.div key={tournament.id} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className={`rounded-2xl border bg-gradient-to-br p-6 cursor-pointer transition-all hover:scale-[1.02] ${tournament.status === "ACTIVE"
                         ? "border-green-500/30 from-green-500/5 to-transparent"
                         : tournament.status === "UPCOMING"
@@ -316,7 +326,7 @@ export default function TournamentsPage() {
                         {t.tournaments?.leaderboard || "Leaderboard"}
                       </h3>
                       <div className="space-y-2">
-                        {tournamentLeaderboard.slice(0, 10).map((entry: any, index: number) => (<div key={entry.id} className="flex items-center justify-between p-3 rounded-xl bg-white/[0.02]">
+                        {tournamentLeaderboard.slice(0, 10).map((entry: any, index: number) => (<div key={entry.user?.address || entry.user?.username || index} className="flex items-center justify-between p-3 rounded-xl bg-white/[0.02]">
                             <div className="flex items-center gap-3">
                               <span className="w-6 text-center font-bold text-white/40">
                                 {index + 1}
@@ -334,13 +344,13 @@ export default function TournamentsPage() {
                     </div>)}
 
                   
-                  {authUser && selectedTournament.status !== "ENDED" && (<button onClick={() => joinMutation.mutate(selectedTournament.id)} disabled={joinMutation.isPending || selectedTournament.participants?.some((p: any) => p.userId === authUser.id)} className={`w-full py-4 rounded-xl font-bold text-sm uppercase tracking-wider transition-all ${selectedTournament.participants?.some((p: any) => p.userId === authUser.id)
+                  {authUser && selectedTournament.status !== "ENDED" && (<button onClick={() => joinMutation.mutate(selectedTournament.id)} disabled={joinMutation.isPending || selectedTournament.participants?.some((p: any) => isCurrentTournamentUser(p))} className={`w-full py-4 rounded-xl font-bold text-sm uppercase tracking-wider transition-all ${selectedTournament.participants?.some((p: any) => isCurrentTournamentUser(p))
                     ? "bg-green-500/20 text-green-400 border border-green-500/30 cursor-not-allowed"
                     : "bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 hover:bg-cyan-500/30"}`}>
                       {joinMutation.isPending ? (<span className="flex items-center justify-center gap-2">
                           <Icons.Loader />
                           {t.tournaments?.joining || "Joining..."}
-                        </span>) : selectedTournament.participants?.some((p: any) => p.userId === authUser.id) ? (<span className="flex items-center justify-center gap-2">
+                        </span>) : selectedTournament.participants?.some((p: any) => isCurrentTournamentUser(p)) ? (<span className="flex items-center justify-center gap-2">
                           <Icons.Check />
                           {t.tournaments?.alreadyJoined || "Already Joined"}
                         </span>) : (`${t.tournaments?.joinTournament || "Join Tournament"} ${selectedTournament.entryFee > 0 ? `(${selectedTournament.entryFee} PTS)` : ""}`)}

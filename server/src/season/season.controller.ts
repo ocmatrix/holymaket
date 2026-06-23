@@ -43,7 +43,6 @@ export class SeasonController {
     @Post(':seasonId/claim-reward')
     @UseGuards(JwtAuthGuard)
     @ApiOperation({ summary: '领取赛季奖励' })
-    @ApiBody({ schema: { type: 'object', properties: { userId: { type: 'string' } } } })
     async claimSeasonReward(
     @Param('seasonId')
     seasonId: string, 
@@ -76,7 +75,6 @@ export class SeasonController {
     @Post('tournaments/:id/join')
     @UseGuards(JwtAuthGuard)
     @ApiOperation({ summary: '报名参加锦标赛' })
-    @ApiBody({ schema: { type: 'object', properties: { userId: { type: 'string' } } } })
     async joinTournament(
     @Param('id')
     id: string, 
@@ -87,7 +85,6 @@ export class SeasonController {
     @Post('tournaments/:id/claim-reward')
     @UseGuards(JwtAuthGuard)
     @ApiOperation({ summary: '领取锦标赛奖励' })
-    @ApiBody({ schema: { type: 'object', properties: { userId: { type: 'string' } } } })
     async claimTournamentReward(
     @Param('id')
     id: string, 

@@ -321,7 +321,6 @@ export class UserController {
             const totalGames = totalBets + totalBattles;
             const winRate = totalGames > 0 ? totalWins / totalGames : 0;
             return {
-                id: user.id,
                 address: user.address,
                 username: user.username,
                 pts: user.pts,

@@ -100,6 +100,17 @@ export default function SeasonPage() {
             return null;
         }
     };
+    const isCurrentSeasonUser = (entry: any) => {
+        const authAddress = authUser?.address?.toLowerCase();
+        const entryAddress = entry?.user?.address?.toLowerCase();
+        if (authAddress && entryAddress) {
+            return authAddress === entryAddress;
+        }
+        const authUsername = authUser?.username?.toLowerCase();
+        const entryUsername = entry?.user?.username?.toLowerCase();
+        return !!authUsername && !!entryUsername && authUsername === entryUsername;
+    };
+    const currentSeasonEntry = leaderboard?.find((e: any) => isCurrentSeasonUser(e));
     const rewards = parseRewards(activeSeason?.rewards);
     return (<div className="min-h-screen bg-transparent text-white">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -191,8 +202,8 @@ export default function SeasonPage() {
                   
                   <div className="divide-y divide-white/5">
                     {leaderboard.map((entry: any, index: number) => {
-                    const isCurrentUser = entry.userId === authUser?.id;
-                    return (<motion.div key={entry.id} initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: index * 0.05 }} className={`grid grid-cols-12 gap-4 p-4 items-center hover:bg-white/[0.02] transition-colors ${isCurrentUser ? "bg-cyan-500/5" : ""}`}>
+                    const isCurrentUser = isCurrentSeasonUser(entry);
+                    return (<motion.div key={entry.user?.address || entry.user?.username || index} initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: index * 0.05 }} className={`grid grid-cols-12 gap-4 p-4 items-center hover:bg-white/[0.02] transition-colors ${isCurrentUser ? "bg-cyan-500/5" : ""}`}>
                           <div className="col-span-1">
                             <RankBadge rank={entry.rank || index + 1}/>
                           </div>
@@ -231,12 +242,12 @@ export default function SeasonPage() {
           {activeTab === "myStats" && (<motion.div key="myStats" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="space-y-6">
               {authUser ? (<>
                   
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    {[
-                    { label: "Your Rank", value: leaderboard?.findIndex((e: any) => e.userId === authUser.id) + 1 || "-", color: "text-white" },
-                    { label: "Total Battles", value: leaderboard?.find((e: any) => e.userId === authUser.id)?.totalBattles || 0, color: "text-white" },
-                    { label: "Wins", value: leaderboard?.find((e: any) => e.userId === authUser.id)?.wins || 0, color: "text-green-400" },
-                    { label: "Season PTS", value: leaderboard?.find((e: any) => e.userId === authUser.id)?.totalPts || 0, color: "text-cyan-400" },
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  {[
+                    { label: "Your Rank", value: leaderboard?.findIndex((e: any) => isCurrentSeasonUser(e)) + 1 || "-", color: "text-white" },
+                    { label: "Total Battles", value: currentSeasonEntry?.totalBattles || 0, color: "text-white" },
+                    { label: "Wins", value: currentSeasonEntry?.wins || 0, color: "text-green-400" },
+                    { label: "Season PTS", value: currentSeasonEntry?.totalPts || 0, color: "text-cyan-400" },
                 ].map((stat) => (<div key={stat.label} className="p-4 rounded-xl bg-white/[0.02] border border-white/5">
                         <p className="text-xs text-white/40 uppercase tracking-wider">{stat.label}</p>
                         <p className={`text-2xl font-bold mt-1 ${stat.color}`}>{stat.value}</p>
