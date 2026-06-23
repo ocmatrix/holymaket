@@ -27,7 +27,7 @@ export const AuroraBackground = ({ className, children, showRadialGradient = tru
             "--violet-200": "#ddd6fe",
             "--cyan-400": "#22d3ee",
             "--transparent": "transparent",
-        }}/>
+        } as React.CSSProperties & Record<string, string>}/>
       </div>
       {children}
     </div>);

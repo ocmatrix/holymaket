@@ -117,7 +117,7 @@ export default function FootballLivePage() {
             return;
         }
         betMutation.mutate({
-            matchId: currentMatch.id,
+            matchId: currentMatch.matchId,
             prediction: selectedPrediction,
             amount: betAmount,
         });
