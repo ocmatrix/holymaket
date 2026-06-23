@@ -3,6 +3,7 @@ import React, { createContext, useContext, useEffect, useState, useRef, useMemo 
 import { io, Socket } from 'socket.io-client';
 import { useAuth } from '../../hooks/use-auth';
 import { useQueryClient } from '@tanstack/react-query';
+import { useAuthStore } from '@/stores/auth-store';
 interface SocketContextType {
     socket: Socket | null;
     isConnected: boolean;
@@ -20,11 +21,12 @@ export function SocketProvider({ children }: {
     const { user } = useAuth();
     const queryClient = useQueryClient();
     const socketRef = useRef<Socket | null>(null);
+    const authToken = useAuthStore(s => s.token);
     useEffect(() => {
         if (!user?.id) {
             return;
         }
-        const token = localStorage.getItem('auth_token');
+        const token = authToken;
         if (!token) {
             return;
         }
@@ -47,8 +49,9 @@ export function SocketProvider({ children }: {
             socketInstance.off('connect', onConnect);
             socketInstance.off('disconnect', onDisconnect);
             socketInstance.disconnect();
+            setSocket(null);
         };
-    }, [user?.id]);
+    }, [user?.id, authToken]);
     useEffect(() => {
         if (socket && user?.id) {
             const userId = user.id;

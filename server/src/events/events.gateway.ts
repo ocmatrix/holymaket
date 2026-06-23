@@ -100,17 +100,22 @@ export class EventsGateway implements OnGatewayConnection, OnGatewayDisconnect {
     }) {
         if (!data?.token)
             return;
-        const payload = this.jwtService.verifyAccessToken(data.token);
-        for (const [uid, sid] of this.onlineUsers.entries()) {
-            if (sid === client.id) {
-                this.onlineUsers.delete(uid);
-                break;
+        try {
+            const payload = this.jwtService.verifyAccessToken(data.token);
+            for (const [uid, sid] of this.onlineUsers.entries()) {
+                if (sid === client.id) {
+                    this.onlineUsers.delete(uid);
+                    break;
+                }
             }
+            client.data.user = payload;
+            this.onlineUsers.set(payload.sub, client.id);
+            client.join(payload.sub);
+            this.logger.log(`User authenticated: ${payload.sub} (Socket: ${client.id})`);
         }
-        client.data.user = payload;
-        this.onlineUsers.set(payload.sub, client.id);
-        client.join(payload.sub);
-        this.logger.log(`User authenticated: ${payload.sub} (Socket: ${client.id})`);
+        catch {
+            this.logger.warn(`Socket authenticate rejected: ${client.id}`);
+        }
     }
     getOnlineUserIds(): string[] {
         return Array.from(this.onlineUsers.keys()).filter(id => id !== 'guest');
@@ -164,9 +169,7 @@ export class EventsGateway implements OnGatewayConnection, OnGatewayDisconnect {
         this.server.emit('roundCountdown', { category, countdown, status });
     }
     emitUserProfileUpdate(userId: string, data: any) {
-        this.server.emit('systemBroadcast', {
-            type: 'USER_PROFILE_UPDATE',
-            userId,
+        this.server.to(userId).emit('userProfileUpdate', {
             data,
             timestamp: new Date()
         });

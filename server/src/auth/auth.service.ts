@@ -5,6 +5,7 @@ import { QuestService } from '../quest/quest.service';
 import { JwtService, TokenPair } from './jwt.service';
 import { EventsGateway } from '../events/events.gateway';
 import { PrivyClient } from '@privy-io/node';
+import { VerifyPrivyDto } from './dto/auth-request.dto';
 @Injectable()
 export class AuthService {
     private readonly logger = new Logger(AuthService.name);
@@ -67,22 +68,14 @@ export class AuthService {
         });
         return { user, tokens };
     }
-    async verifyPrivy(data: {
-        privyToken?: string;
-        accessToken?: string;
-        token?: string;
-        referrerCode?: string;
-    }): Promise<{
+    async verifyPrivy(data: VerifyPrivyDto): Promise<{
         user: any;
         tokens: TokenPair;
         isNewUser: boolean;
     }> {
         try {
             const { referrerCode } = data;
-            const privyToken = data.privyToken || data.accessToken || data.token;
-            if (!privyToken) {
-                throw new UnauthorizedException('Privy access token is required');
-            }
+            const privyToken = data.privyToken;
             const privyClient = this.getPrivyClient();
             const claims = await privyClient.utils().auth().verifyAccessToken(privyToken);
             const privyId = claims.user_id;
@@ -221,7 +214,10 @@ export class AuthService {
             throw error;
         }
     }
-    async refreshToken(refreshToken: string): Promise<TokenPair> {
+    async refreshToken(refreshToken: string): Promise<{
+        user: any;
+        tokens: TokenPair;
+    }> {
         return this.jwtService.refreshAccessToken(refreshToken, (id) => this.prisma.user.findUnique({ where: { id } }));
     }
     verifyToken(token: string) {

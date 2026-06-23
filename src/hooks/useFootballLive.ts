@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useCallback, useRef } from 'react';
 import { io, Socket } from 'socket.io-client';
+import { useAuthStore } from '@/stores/auth-store';
 export interface MatchLiveUpdate {
     matchId: string;
     fixtureId: number;
@@ -75,11 +76,12 @@ let globalSocket: Socket | null = null;
 export function useFootballLive(callbacks?: FootballLiveHookCallbacks) {
     const socketRef = useRef<Socket | null>(null);
     const callbacksRef = useRef(callbacks);
+    const authToken = useAuthStore.getState().token;
     callbacksRef.current = callbacks;
     useEffect(() => {
         const wsUrl = process.env.NEXT_PUBLIC_WS_URL || 'http://localhost:3001';
         if (!socketRef.current) {
-            const token = localStorage.getItem('auth_token');
+            const token = authToken;
             if (!token) {
                 callbacksRef.current?.onError?.('Authentication required');
                 return;
@@ -125,7 +127,7 @@ export function useFootballLive(callbacks?: FootballLiveHookCallbacks) {
                 globalSocket = null;
             }
         };
-    }, []);
+    }, [authToken]);
     const subscribeToMatch = useCallback((matchId: string) => {
         if (socketRef.current) {
             socketRef.current.emit('subscribeToMatch', { matchId });
@@ -154,7 +156,7 @@ export function getFootballSocket(): Socket | null {
 export function connectFootballSocket() {
     if (!globalSocket || !globalSocket.connected) {
         const wsUrl = process.env.NEXT_PUBLIC_WS_URL || 'http://localhost:3001';
-        const token = localStorage.getItem('auth_token');
+        const token = useAuthStore.getState().token;
         if (!token) {
             return null;
         }

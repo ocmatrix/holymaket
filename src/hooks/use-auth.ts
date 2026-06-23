@@ -23,27 +23,33 @@ axios.interceptors.response.use((response) => response, async (error) => {
         originalRequest.url &&
         !originalRequest.url.includes('/auth/')) {
         originalRequest._retry = true;
-        const refreshToken = localStorage.getItem('refresh_token');
-        if (!refreshToken)
-            return Promise.reject(error);
+        const refreshSession = async () => {
+            const { data } = await axios.post(`${API_BASE}/auth/refresh`, {}, { withCredentials: true });
+            if (data.accessToken) {
+                useAuthStore.getState().setToken(data.accessToken);
+                originalRequest.headers['Authorization'] = `Bearer ${data.accessToken}`;
+                if (data.user) {
+                    useAuthStore.getState().setUser(data.user);
+                }
+                useAuthStore.getState().setStatus('authenticated');
+                onTokenRefreshed(data.accessToken);
+                return axios(originalRequest);
+            }
+            throw new Error('Refresh session failed');
+        };
         if (!isRefreshing) {
             isRefreshing = true;
             try {
-                const { data } = await axios.post(`${API_BASE}/auth/refresh`, { refreshToken });
-                localStorage.setItem('auth_token', data.accessToken);
-                if (data.refreshToken)
-                    localStorage.setItem('refresh_token', data.refreshToken);
-                onTokenRefreshed(data.accessToken);
-                isRefreshing = false;
-                originalRequest.headers['Authorization'] = `Bearer ${data.accessToken}`;
-                return axios(originalRequest);
+                return await refreshSession();
             }
             catch {
                 isRefreshing = false;
                 refreshSubscribers = [];
-                localStorage.removeItem('auth_token');
-                localStorage.removeItem('refresh_token');
+                useAuthStore.getState().setToken(null);
                 return Promise.reject(error);
+            }
+            finally {
+                isRefreshing = false;
             }
         }
         else {
@@ -61,6 +67,7 @@ export function useAuth() {
     const { ready, authenticated, user: privyUser, login: privyLogin, logout: privyLogout, linkWallet: privyLinkWallet, linkTwitter: privyLinkTwitter, linkDiscord: privyLinkDiscord, linkEmail: privyLinkEmail, getAccessToken } = usePrivy();
     const { wallets } = useWallets();
     const dbUser = useAuthStore(s => s.user);
+    const authToken = useAuthStore(s => s.token);
     const setStatus = useAuthStore(s => s.setStatus);
     const setUser = useAuthStore(s => s.setUser);
     const setToken = useAuthStore(s => s.setToken);
@@ -69,6 +76,23 @@ export function useAuth() {
     const t = useLanguageStore(s => s.t);
     const showNotification = useUIStore(s => s.showNotification);
     const syncingRef = useRef(false);
+    const restoreAttemptedRef = useRef(false);
+    const restoreSession = useCallback(async () => {
+        try {
+            const { data } = await axios.post(`${API_BASE}/auth/refresh`, {}, { withCredentials: true });
+            if (data?.accessToken) {
+                setToken(data.accessToken);
+                if (data.user) {
+                    setUser(data.user);
+                }
+                setStatus('authenticated');
+                return true;
+            }
+        }
+        catch {
+        }
+        return false;
+    }, [setStatus, setToken, setUser]);
     const syncUserToBackend = useCallback(async (isReconnect = false) => {
         if (!privyUser || syncingRef.current)
             return;
@@ -86,11 +110,7 @@ export function useAuth() {
             });
             if (data.accessToken || data.token) {
                 const accessToken = data.accessToken || data.token;
-                localStorage.setItem('auth_token', accessToken);
                 setToken(accessToken);
-            }
-            if (data.refreshToken) {
-                localStorage.setItem('refresh_token', data.refreshToken);
             }
             setUser(data.user);
             setStatus('authenticated');
@@ -108,11 +128,15 @@ export function useAuth() {
         }
     }, [privyUser, getAccessToken, setUser, setToken, setStatus, showNotification, t]);
     useEffect(() => {
-        const savedToken = localStorage.getItem('auth_token');
-        if (savedToken) {
-            setToken(savedToken);
+        if (ready && !authToken && !restoreAttemptedRef.current && !authenticated) {
+            restoreAttemptedRef.current = true;
+            restoreSession().then((restored) => {
+                if (!restored && !authenticated) {
+                    setStatus('unauthenticated');
+                }
+            });
         }
-    }, [setToken]);
+    }, [ready, authToken, authenticated, restoreSession, setStatus]);
     useEffect(() => {
         if (ready && authenticated && privyUser && !dbUser && !syncingRef.current) {
             syncUserToBackend();
@@ -144,8 +168,7 @@ export function useAuth() {
     const logout = () => {
         storeLogout();
         privyLogout();
-        localStorage.removeItem('auth_token');
-        localStorage.removeItem('refresh_token');
+        axios.post(`${API_BASE}/auth/logout`, {}, { withCredentials: true }).catch(() => undefined);
     };
     const user = dbUser ? {
         ...dbUser,
