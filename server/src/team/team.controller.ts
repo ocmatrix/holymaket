@@ -1,18 +1,23 @@
-import { Controller, Get, Post, Body, Param, Query } from '@nestjs/common';
+import { Controller, Get, Post, Body, Query, UseGuards } from '@nestjs/common';
 import { TeamService } from './team.service';
 import { ApiTags, ApiOperation, ApiBody, ApiQuery } from '@nestjs/swagger';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { JwtPayload } from '../auth/jwt.service';
 @ApiTags('team')
 @Controller('team')
 export class TeamController {
     constructor(private readonly teamService: TeamService) { }
     @Get('my/:userId')
+    @UseGuards(JwtAuthGuard)
     @ApiOperation({ summary: '获取我的团队详情' })
     async getMyTeam(
-    @Param('userId')
-    userId: string) {
-        return this.teamService.getMyTeam(userId);
+    @CurrentUser()
+    currentUser: JwtPayload) {
+        return this.teamService.getMyTeam(currentUser.sub);
     }
     @Post('create')
+    @UseGuards(JwtAuthGuard)
     @ApiOperation({ summary: '创建新团队' })
     @ApiBody({ schema: {
             type: 'object',
@@ -24,16 +29,18 @@ export class TeamController {
             }
         } })
     async createTeam(
+    @CurrentUser()
+    currentUser: JwtPayload,
     @Body()
     body: {
-        userId: string;
         name: string;
         description: string;
         isPublic?: boolean;
     }) {
-        return this.teamService.createTeam(body.userId, body.name, body.description, body.isPublic);
+        return this.teamService.createTeam(currentUser.sub, body.name, body.description, body.isPublic);
     }
     @Post('join/invite')
+    @UseGuards(JwtAuthGuard)
     @ApiOperation({ summary: '通过邀请码加入团队' })
     @ApiBody({ schema: {
             type: 'object',
@@ -43,14 +50,16 @@ export class TeamController {
             }
         } })
     async joinByInviteCode(
+    @CurrentUser()
+    currentUser: JwtPayload,
     @Body()
     body: {
-        userId: string;
         inviteCode: string;
     }) {
-        return this.teamService.joinTeamByInviteCode(body.userId, body.inviteCode);
+        return this.teamService.joinTeamByInviteCode(currentUser.sub, body.inviteCode);
     }
     @Post('join/public')
+    @UseGuards(JwtAuthGuard)
     @ApiOperation({ summary: '加入公开团队' })
     @ApiBody({ schema: {
             type: 'object',
@@ -60,14 +69,16 @@ export class TeamController {
             }
         } })
     async joinPublicTeam(
+    @CurrentUser()
+    currentUser: JwtPayload,
     @Body()
     body: {
-        userId: string;
         teamId: string;
     }) {
-        return this.teamService.joinPublicTeam(body.userId, body.teamId);
+        return this.teamService.joinPublicTeam(currentUser.sub, body.teamId);
     }
     @Post('leave')
+    @UseGuards(JwtAuthGuard)
     @ApiOperation({ summary: '离开当前团队' })
     @ApiBody({ schema: {
             type: 'object',
@@ -76,13 +87,12 @@ export class TeamController {
             }
         } })
     async leaveTeam(
-    @Body()
-    body: {
-        userId: string;
-    }) {
-        return this.teamService.leaveTeam(body.userId);
+    @CurrentUser()
+    currentUser: JwtPayload) {
+        return this.teamService.leaveTeam(currentUser.sub);
     }
     @Post('transfer-leadership')
+    @UseGuards(JwtAuthGuard)
     @ApiOperation({ summary: '转让队长权限' })
     @ApiBody({ schema: {
             type: 'object',
@@ -92,14 +102,16 @@ export class TeamController {
             }
         } })
     async transferLeadership(
+    @CurrentUser()
+    currentUser: JwtPayload,
     @Body()
     body: {
-        currentLeaderId: string;
         newLeaderId: string;
     }) {
-        return this.teamService.transferLeadership(body.currentLeaderId, body.newLeaderId);
+        return this.teamService.transferLeadership(currentUser.sub, body.newLeaderId);
     }
     @Post('kick')
+    @UseGuards(JwtAuthGuard)
     @ApiOperation({ summary: '踢出团队成员（仅队长）' })
     @ApiBody({ schema: {
             type: 'object',
@@ -109,14 +121,16 @@ export class TeamController {
             }
         } })
     async kickMember(
+    @CurrentUser()
+    currentUser: JwtPayload,
     @Body()
     body: {
-        leaderId: string;
         memberId: string;
     }) {
-        return this.teamService.kickMember(body.leaderId, body.memberId);
+        return this.teamService.kickMember(currentUser.sub, body.memberId);
     }
     @Post('refresh-invite-code')
+    @UseGuards(JwtAuthGuard)
     @ApiOperation({ summary: '刷新邀请码（仅队长）' })
     @ApiBody({ schema: {
             type: 'object',
@@ -125,11 +139,9 @@ export class TeamController {
             }
         } })
     async refreshInviteCode(
-    @Body()
-    body: {
-        leaderId: string;
-    }) {
-        return this.teamService.refreshInviteCode(body.leaderId);
+    @CurrentUser()
+    currentUser: JwtPayload) {
+        return this.teamService.refreshInviteCode(currentUser.sub);
     }
     @Get('search')
     @ApiOperation({ summary: '搜索公开团队' })

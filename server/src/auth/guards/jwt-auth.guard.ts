@@ -10,7 +10,7 @@ export class JwtAuthGuard implements CanActivate {
             throw new UnauthorizedException('No authorization header found');
         }
         try {
-            const token = authHeader.split(' ')[1];
+            const token = this.jwtService.extractTokenFromHeader(authHeader);
             const payload = this.jwtService.verifyAccessToken(token);
             request.user = payload;
             return true;

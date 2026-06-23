@@ -219,7 +219,7 @@ export default function LeaderboardPage() {
         enabled: activeTab === "tournaments",
     });
     const joinMutation = useMutation({
-        mutationFn: (tournamentId: string) => api.joinTournament(tournamentId, authUser!.id),
+        mutationFn: (tournamentId: string) => api.joinTournament(tournamentId),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ["tournaments"] });
         },
@@ -258,8 +258,29 @@ export default function LeaderboardPage() {
     }
     const top3 = leaderboard?.slice(0, 3) || [];
     const others = leaderboard?.slice(3) || [];
-    const currentUserRank = authUser?.id ? leaderboard?.findIndex((u: any) => u.id === authUser.id) : -1;
+    function isCurrentGlobalUser(entry: any) {
+        const authAddress = authUser?.address?.toLowerCase();
+        const entryAddress = entry?.address?.toLowerCase();
+        if (authAddress && entryAddress) {
+            return authAddress === entryAddress;
+        }
+        const authUsername = authUser?.username?.toLowerCase();
+        const entryUsername = entry?.username?.toLowerCase();
+        return !!authUsername && !!entryUsername && authUsername === entryUsername;
+    }
+    const currentUserRank = authUser ? leaderboard?.findIndex((u: any) => isCurrentGlobalUser(u)) : -1;
     const currentUserData = currentUserRank !== undefined && currentUserRank >= 0 ? leaderboard?.[currentUserRank] : null;
+    const getSeasonUserKey = (entry: any) => entry?.user?.address || entry?.user?.username || entry?.username || `season-${entry?.rank ?? "unknown"}`;
+    const isCurrentSeasonUser = (entry: any) => {
+        const authAddress = authUser?.address?.toLowerCase();
+        const entryAddress = entry?.user?.address?.toLowerCase();
+        if (authAddress && entryAddress) {
+            return authAddress === entryAddress;
+        }
+        const authUsername = authUser?.username?.toLowerCase();
+        const entryUsername = entry?.user?.username?.toLowerCase() || entry?.username?.toLowerCase();
+        return !!authUsername && !!entryUsername && authUsername === entryUsername;
+    };
     return (<div className="min-h-screen bg-transparent text-white relative overflow-hidden">
       
       <div className="absolute inset-0 pointer-events-none">
@@ -350,7 +371,16 @@ export default function LeaderboardPage() {
                 {[1, 2, 3, 4].map((i) => (<div key={i} className="h-48 rounded-2xl bg-white/5 animate-pulse"/>))}
               </div>) : tournaments && tournaments.length > 0 ? (<div className="grid md:grid-cols-2 gap-4">
                 {tournaments.map((tournament: any) => {
-                    const isParticipant = tournament.participants?.some((p: any) => p.userId === authUser?.id);
+                    const isParticipant = tournament.participants?.some((p: any) => {
+                        const participantAddress = p.user?.address?.toLowerCase();
+                        const authAddress = authUser?.address?.toLowerCase();
+                        if (authAddress && participantAddress) {
+                            return authAddress === participantAddress;
+                        }
+                        const participantUsername = p.user?.username?.toLowerCase();
+                        const authUsername = authUser?.username?.toLowerCase();
+                        return !!authUsername && !!participantUsername && authUsername === participantUsername;
+                    });
                     const isActive = tournament.status === "ACTIVE";
                     const isUpcoming = tournament.status === "UPCOMING";
                     return (<motion.div key={tournament.id} initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className={`relative rounded-2xl border p-6 transition-all hover:scale-[1.02] ${isActive
@@ -446,7 +476,9 @@ export default function LeaderboardPage() {
                         <p className="text-2xl font-black text-white">
                           {(() => {
                     const data = activeTab === "season" ? seasonLeaderboard : leaderboard;
-                    const rank = data?.findIndex((u: any) => u.id === authUser.id || u.userId === authUser.id);
+                    const rank = activeTab === "season"
+                        ? data?.findIndex((u: any) => isCurrentSeasonUser(u))
+                        : data?.findIndex((u: any) => isCurrentGlobalUser(u));
                     return rank !== undefined && rank >= 0 ? `#${rank + 1}` : (t.leaderboard?.notRanked || "Not Ranked");
                 })()}
                         </p>
@@ -491,9 +523,9 @@ export default function LeaderboardPage() {
                             ...user,
                             username: user.user?.username || user.username,
                             score: user.totalPts || user.score || user.pts,
-                            id: user.userId || user.id
+                            id: getSeasonUserKey(user)
                         } : user;
-                        return (<OctoPodiumCard key={userData.id} user={userData} rank={rank} isCurrentUser={authUser?.id === userData.id || authUser?.id === user.userId} t={t}/>);
+                        return (<OctoPodiumCard key={userData.id} user={userData} rank={rank} isCurrentUser={activeTab === "season" ? isCurrentSeasonUser(user) : authUser?.id === userData.id} t={t}/>);
                     })}
                   </div>);
             })()}
@@ -528,9 +560,9 @@ export default function LeaderboardPage() {
                             ...user,
                             username: user.user?.username || user.username,
                             score: user.totalPts || user.score || user.pts,
-                            id: user.userId || user.id
+                            id: getSeasonUserKey(user)
                         } : user;
-                        return (<OctoLeaderboardRow key={userData.id} user={userData} rank={index + 4} isCurrentUser={authUser?.id === userData.id || authUser?.id === user.userId}/>);
+                        return (<OctoLeaderboardRow key={userData.id} user={userData} rank={index + 4} isCurrentUser={activeTab === "season" ? isCurrentSeasonUser(user) : authUser?.id === userData.id}/>);
                     }) : (<tr>
                               <td colSpan={4} className="px-8 py-20 text-center text-white/20 font-black uppercase tracking-widest text-xs">
                                 {t.leaderboard?.noRankingsYet || "No rankings yet"}

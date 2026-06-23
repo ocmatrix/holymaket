@@ -1,5 +1,6 @@
 "use client";
 import { useQuery } from "@tanstack/react-query";
+import { useSearchParams } from "next/navigation";
 import { useLanguageStore } from "../../../stores/language-store";
 import { translations } from "../../../lib/translations";
 import { useAuth } from "../../../hooks/use-auth";
@@ -42,11 +43,13 @@ function formatHash(value: string) {
 export default function PortfolioPage() {
     const { user } = useAuth();
     const { wallets } = useWallets();
+    const searchParams = useSearchParams();
     const { currentLanguage } = useLanguageStore();
     const t = translations[currentLanguage] || translations["en"];
     const { profile, isLoading: profileLoading } = useProfile(user?.id || "");
     const activeWallet = wallets[0];
-    const indexerAddress = activeWallet?.address || user?.address;
+    const previewAddress = searchParams.get("address") || undefined;
+    const indexerAddress = activeWallet?.address || user?.address || previewAddress;
     const userId = user?.id || (profile as {
         id?: string;
     })?.id;
@@ -178,6 +181,10 @@ export default function PortfolioPage() {
               {indexerAddress.slice(0, 6)}...{indexerAddress.slice(-4)}
             </span>)}
         </div>
+
+        {!activeWallet?.address && !user?.address && previewAddress && (<div className="mb-6 rounded-2xl border border-cyan-500/20 bg-cyan-500/10 p-4 text-sm text-cyan-100">
+            Read-only preview for indexed wallet address
+          </div>)}
 
         {!indexerAddress ? (<div className="rounded-2xl border border-white/10 bg-white/[0.02] p-6 text-center text-sm text-white/45">
             Connect wallet to view indexed positions, trades and claims

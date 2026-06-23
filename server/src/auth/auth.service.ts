@@ -4,14 +4,29 @@ import { verifyMessage } from 'viem';
 import { QuestService } from '../quest/quest.service';
 import { JwtService, TokenPair } from './jwt.service';
 import { EventsGateway } from '../events/events.gateway';
+import { PrivyClient } from '@privy-io/node';
+import { VerifyPrivyDto } from './dto/auth-request.dto';
 @Injectable()
 export class AuthService {
     private readonly logger = new Logger(AuthService.name);
+    private privyClient: PrivyClient | null = null;
     private nonces = new Map<string, {
         nonce: string;
         expires: number;
     }>();
     constructor(private prisma: PrismaService, private questService: QuestService, private jwtService: JwtService, private eventsGateway: EventsGateway) { }
+    private getPrivyClient(): PrivyClient {
+        if (this.privyClient) {
+            return this.privyClient;
+        }
+        const appId = process.env.PRIVY_APP_ID;
+        const appSecret = process.env.PRIVY_APP_SECRET;
+        if (!appId || !appSecret) {
+            throw new UnauthorizedException('Privy server verification is not configured');
+        }
+        this.privyClient = new PrivyClient({ appId, appSecret });
+        return this.privyClient;
+    }
     generateNonce(address: string) {
         const nonce = `Sign this message to login to Superoctop Hub: ${Math.floor(Math.random() * 1000000)}`;
         const expires = Date.now() + 1000 * 60 * 5;
@@ -53,20 +68,28 @@ export class AuthService {
         });
         return { user, tokens };
     }
-    async verifyPrivy(data: {
-        privyId: string;
-        address?: string;
-        email?: string;
-        twitterId?: string;
-        discordId?: string;
-        referrerCode?: string;
-    }): Promise<{
+    async verifyPrivy(data: VerifyPrivyDto): Promise<{
         user: any;
         tokens: TokenPair;
         isNewUser: boolean;
     }> {
         try {
-            const { privyId, address, email, twitterId, discordId, referrerCode } = data;
+            const { referrerCode } = data;
+            const privyToken = data.privyToken;
+            const privyClient = this.getPrivyClient();
+            const claims = await privyClient.utils().auth().verifyAccessToken(privyToken);
+            const privyId = claims.user_id;
+            const privyUser = await privyClient.users()._get(privyId);
+            const linkedAccounts = (privyUser?.linked_accounts || []) as Array<Record<string, any>>;
+            const address = linkedAccounts.find((account) => account.type === 'wallet' || account.type === 'ethereum')?.address?.toLowerCase()
+                || null;
+            const email = linkedAccounts.find((account) => account.type === 'email')?.address
+                || linkedAccounts.find((account) => account.type === 'google_oauth')?.email
+                || null;
+            const twitterId = linkedAccounts.find((account) => account.type === 'twitter_oauth')?.username
+                || null;
+            const discordId = linkedAccounts.find((account) => account.type === 'discord_oauth')?.username
+                || null;
             this.logger.log(`Verifying Privy user: ${privyId}`);
             let user = await this.prisma.user.findUnique({
                 where: { privyId }
@@ -191,7 +214,10 @@ export class AuthService {
             throw error;
         }
     }
-    async refreshToken(refreshToken: string): Promise<TokenPair> {
+    async refreshToken(refreshToken: string): Promise<{
+        user: any;
+        tokens: TokenPair;
+    }> {
         return this.jwtService.refreshAccessToken(refreshToken, (id) => this.prisma.user.findUnique({ where: { id } }));
     }
     verifyToken(token: string) {

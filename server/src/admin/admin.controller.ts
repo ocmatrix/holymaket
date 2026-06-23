@@ -7,6 +7,7 @@ import { EventsGateway } from '../events/events.gateway';
 import { PrismaService } from '../prisma.service';
 import { AdminTokenGuard } from '../auth/guards/admin-token.guard';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
+import { MarketOutcome } from '@prisma/client';
 @ApiTags('admin')
 @Controller('super-admin-api')
 @UseGuards(AdminTokenGuard)
@@ -151,14 +152,18 @@ export class AdminController {
         title: string;
         duration: number;
     }) {
-        return this.adminService.createMarket(data.category, data.timeframe, data.title, data.duration);
+        return this.marketService.createAdminMarket(data.category, data.timeframe, data.title, data.duration);
     }
     @Post('market/resolve/:id')
     @ApiOperation({ summary: '强制结算预测市场' })
     async resolveMarket(
     @Param('id')
-    id: string) {
-        return this.marketService.resolveMarket(id);
+    id: string,
+    @Body()
+    body?: {
+        outcome?: MarketOutcome;
+    }) {
+        return this.marketService.resolveMarket(id, body?.outcome);
     }
     @Post('quest/delete')
     @ApiOperation({ summary: '删除任务' })

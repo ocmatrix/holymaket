@@ -5,6 +5,7 @@ import { PrismaService } from '../prisma.service';
 import { QuestService } from '../quest/quest.service';
 import { EventsGateway } from '../events/events.gateway';
 import { IndexService } from './index.service';
+import { MarketChainService } from './market-chain.service';
 @Injectable()
 export class MarketService implements OnModuleInit {
     private readonly logger = new Logger(MarketService.name);
@@ -19,7 +20,8 @@ export class MarketService implements OnModuleInit {
     ];
     constructor(private prisma: PrismaService, private questService: QuestService, private eventsGateway: EventsGateway, 
     @Inject(forwardRef(() => IndexService))
-    private indexService: IndexService) { }
+    private indexService: IndexService,
+    private marketChainService: MarketChainService) { }
     async onModuleInit() {
         this.logger.log('MarketService (样品): 自动创建市场，无真实结算派彩');
         await this.checkAndCreateMarkets();
@@ -121,6 +123,46 @@ export class MarketService implements OnModuleInit {
                 formulaParams: formulaParams as any,
             }
         });
+    }
+    async createAdminMarket(category: string, timeframe: string, title: string, durationMinutes: number) {
+        const now = new Date();
+        const endTime = new Date(now.getTime() + durationMinutes * 60 * 1000);
+        const lockTime = new Date(Math.max(now.getTime(), endTime.getTime() - 10 * 1000));
+        const startPrice = await this.getCurrentIndexValue(category);
+        const components = await this.getCurrentComponents(category);
+        const chainMarket = await this.marketChainService.createMarket({
+            title,
+            durationMinutes,
+        });
+        const market = await this.prisma.market.create({
+            data: {
+                title,
+                category,
+                timeframe,
+                status: MarketStatus.ACTIVE,
+                endTime,
+                lockTime,
+                resolutionTime: new Date(endTime.getTime() + 60 * 1000),
+                poolSize: Number(chainMarket.initialCollateral) / Math.pow(10, chainMarket.collateralDecimals),
+                startPrice,
+                aiPrediction: 'On-chain market managed by admin',
+            }
+        });
+        await this.createSnapshot(market.id, 'START', startPrice, components, {
+            chainMarketId: chainMarket.chainMarketId,
+            chainMarketAddress: chainMarket.chainMarketAddress,
+            chainTxHash: chainMarket.txHash,
+            collateralAddress: chainMarket.collateralAddress,
+            collateralDecimals: chainMarket.collateralDecimals,
+            initialCollateral: chainMarket.initialCollateral,
+            initialPriceYesBps: chainMarket.initialPriceYesBps,
+            startTime: chainMarket.startTime,
+            endTime: chainMarket.endTime,
+        });
+        return {
+            ...market,
+            chainMarket,
+        };
     }
     async findAll() {
         const markets = await this.prisma.market.findMany({
@@ -297,8 +339,57 @@ export class MarketService implements OnModuleInit {
     async handleSettlement() {
         this.logger.debug('handleSettlement: 样品模式已禁用自动结算');
     }
-    async resolveMarket(marketId: string) {
-        this.logger.log(`resolveMarket(${marketId}): 样品模式 — 不执行价差裁决与派彩`);
+    async resolveMarket(marketId: string, requestedOutcome?: MarketOutcome) {
+        const market = await this.prisma.market.findUnique({ where: { id: marketId } });
+        if (!market)
+            throw new NotFoundException('Market not found');
+        const startSnapshot = await this.prisma.marketSnapshot.findFirst({
+            where: { marketId, snapshotType: 'START' },
+            orderBy: { timestamp: 'asc' }
+        });
+        const chainMarketAddress = (startSnapshot?.formulaParams as {
+            chainMarketAddress?: string;
+        } | null)?.chainMarketAddress;
+        if (!chainMarketAddress) {
+            throw new BadRequestException('Market is not linked to an on-chain market');
+        }
+        const endPrice = await this.getCurrentIndexValue(market.category);
+        const components = await this.getCurrentComponents(market.category);
+        const normalizedOutcome = requestedOutcome || this.resolveOutcomeFromPrices(market.startPrice ? Number(market.startPrice) : 0, endPrice);
+        const evidenceURI = this.buildResolutionEvidence(market.title, market.startPrice ? Number(market.startPrice) : 0, endPrice, normalizedOutcome);
+        await this.createSnapshot(market.id, 'END', endPrice, components, {
+            source: 'admin-resolution',
+            requestedOutcome: normalizedOutcome,
+        });
+        const chainResolution = await this.marketChainService.resolveMarket(chainMarketAddress, normalizedOutcome === MarketOutcome.YES ? 'YES' : 'NO', evidenceURI);
+        const updatedMarket = await this.prisma.market.update({
+            where: { id: marketId },
+            data: {
+                status: MarketStatus.RESOLVED,
+                outcome: normalizedOutcome,
+                endPrice,
+                resolutionTime: new Date(),
+            }
+        });
+        await this.createSnapshot(market.id, 'SETTLEMENT', endPrice, components, {
+            chainResolutionTxHash: chainResolution.txHash,
+            chainOutcome: chainResolution.outcome,
+            evidenceURI: chainResolution.evidenceURI,
+        });
+        return {
+            ...updatedMarket,
+            chainResolution,
+        };
+    }
+    private resolveOutcomeFromPrices(startPrice: number, endPrice: number): MarketOutcome {
+        if (endPrice >= startPrice) {
+            return MarketOutcome.YES;
+        }
+        return MarketOutcome.NO;
+    }
+    private buildResolutionEvidence(title: string, startPrice: number, endPrice: number, outcome: MarketOutcome): string {
+        const encodedTitle = encodeURIComponent(title);
+        return `ipfs://xmarket/resolution?title=${encodedTitle}&start=${startPrice}&end=${endPrice}&outcome=${outcome.toLowerCase()}`;
     }
     async getAiAnalysis(marketId: string) {
         return {

@@ -72,18 +72,22 @@ export class JwtService {
             throw new UnauthorizedException('Invalid or expired refresh token');
         }
     }
-    async refreshAccessToken(refreshToken: string, getUserById: (id: string) => Promise<any>): Promise<TokenPair> {
+    async refreshAccessToken(refreshToken: string, getUserById: (id: string) => Promise<any>): Promise<{
+        user: any;
+        tokens: TokenPair;
+    }> {
         const { sub: userId } = this.verifyRefreshToken(refreshToken);
         const user = await getUserById(userId);
         if (!user) {
             throw new UnauthorizedException('User not found');
         }
-        return this.generateTokenPair({
+        const tokens = this.generateTokenPair({
             sub: user.id,
             address: user.address,
             privyId: user.privyId,
             role: user.role || 'USER',
         });
+        return { user, tokens };
     }
     extractTokenFromHeader(authHeader: string): string {
         if (!authHeader) {

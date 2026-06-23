@@ -1,6 +1,10 @@
-import { Controller, Get, Post, Body, Param, Query, HttpException, HttpStatus, Logger, } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Query, HttpException, HttpStatus, Logger, UseGuards, } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiQuery, ApiParam } from '@nestjs/swagger';
 import { EsportsService } from './esports.service';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { AdminTokenGuard } from '../auth/guards/admin-token.guard';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { JwtPayload } from '../auth/jwt.service';
 @ApiTags('Esports')
 @Controller('esports')
 export class EsportsController {
@@ -77,24 +81,26 @@ export class EsportsController {
         }
     }
     @Post('bet')
+    @UseGuards(JwtAuthGuard)
     @ApiOperation({ summary: '电竞下注' })
     async placeBet(
+    @CurrentUser()
+    currentUser: JwtPayload,
     @Body()
     body: {
-        userId: string;
         matchId: string;
         prediction: 'HOME' | 'AWAY';
         amount: number;
     }) {
         try {
-            const { userId, matchId, prediction, amount } = body;
-            if (!userId || !matchId || !prediction || !amount) {
+            const { matchId, prediction, amount } = body;
+            if (!matchId || !prediction || !amount) {
                 throw new HttpException('Missing required fields', HttpStatus.BAD_REQUEST);
             }
             if (amount <= 0) {
                 throw new HttpException('Amount must be positive', HttpStatus.BAD_REQUEST);
             }
-            const bet = await this.esportsService.placeBet(userId, matchId, prediction, amount);
+            const bet = await this.esportsService.placeBet(currentUser.sub, matchId, prediction, amount);
             return {
                 success: true,
                 data: bet,
@@ -109,16 +115,17 @@ export class EsportsController {
         }
     }
     @Get('bets/:userId')
+    @UseGuards(JwtAuthGuard)
     @ApiOperation({ summary: '获取用户电竞下注历史' })
     @ApiParam({ name: 'userId', description: '用户 ID' })
     @ApiQuery({ name: 'limit', required: false, description: '返回数量限制' })
     async getUserBets(
-    @Param('userId')
-    userId: string, 
+    @CurrentUser()
+    currentUser: JwtPayload,
     @Query('limit')
     limit?: string) {
         try {
-            const bets = await this.esportsService.getUserBets(userId, limit ? parseInt(limit) : 20);
+            const bets = await this.esportsService.getUserBets(currentUser.sub, limit ? parseInt(limit) : 20);
             return {
                 success: true,
                 data: bets,
@@ -130,6 +137,7 @@ export class EsportsController {
         }
     }
     @Post('sync')
+    @UseGuards(AdminTokenGuard)
     @ApiOperation({ summary: '手动同步电竞比赛数据' })
     async syncMatches() {
         try {

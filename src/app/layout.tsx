@@ -1,3 +1,17 @@
+import "@fontsource-variable/inter/wght.css";
+import "@fontsource-variable/space-grotesk/wght.css";
+import "@fontsource/noto-sans-tc/chinese-traditional-400.css";
+import "@fontsource/noto-sans-tc/chinese-traditional-500.css";
+import "@fontsource/noto-sans-tc/chinese-traditional-700.css";
+import "@fontsource/noto-sans-thai/thai-400.css";
+import "@fontsource/noto-sans-thai/thai-500.css";
+import "@fontsource/noto-sans-thai/thai-700.css";
+import "@fontsource/noto-sans-devanagari/devanagari-400.css";
+import "@fontsource/noto-sans-devanagari/devanagari-500.css";
+import "@fontsource/noto-sans-devanagari/devanagari-700.css";
+import "@fontsource/roboto/400.css";
+import "@fontsource/roboto/500.css";
+import "@fontsource/roboto/700.css";
 import "../styles/globals.css";
 import type { Metadata } from "next";
 import { Navbar } from "../components/layout/navbar";

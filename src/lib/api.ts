@@ -1,11 +1,34 @@
+import { useAuthStore } from "@/stores/auth-store";
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
+function withAuth(options: RequestInit = {}): RequestInit {
+    if (typeof window === "undefined") {
+        return options;
+    }
+    const token = useAuthStore.getState().token;
+    if (!token) {
+        return {
+            ...options,
+            credentials: options.credentials ?? "include",
+        };
+    }
+    const headers = new Headers(options.headers);
+    if (!headers.has("Authorization")) {
+        headers.set("Authorization", `Bearer ${token}`);
+    }
+    return {
+        ...options,
+        headers,
+        credentials: options.credentials ?? "include",
+    };
+}
 async function fetchWithRetry(url: string, options: RequestInit = {}, retries = 3, backoff = 1000): Promise<Response> {
     try {
-        const res = await fetch(url, options);
+        const requestOptions = withAuth(options);
+        const res = await fetch(url, requestOptions);
         if (!res.ok && (res.status === 429 || res.status >= 500) && retries > 0) {
             console.warn(`[API_RETRY] ${res.status} error on ${url}. Retrying in ${backoff}ms... (${retries} attempts left)`);
             await new Promise(resolve => setTimeout(resolve, backoff));
-            return fetchWithRetry(url, options, retries - 1, backoff * 2);
+            return fetchWithRetry(url, requestOptions, retries - 1, backoff * 2);
         }
         return res;
     }
@@ -287,11 +310,11 @@ export const api = {
             throw new Error("Failed to fetch tournament leaderboard");
         return res.json();
     },
-    async joinTournament(tournamentId: string, userId: string) {
+    async joinTournament(tournamentId: string) {
         const res = await fetchWithRetry(`${API_BASE_URL}/season/tournaments/${tournamentId}/join`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ userId }),
+            body: JSON.stringify({}),
         });
         if (!res.ok)
             throw new Error("Failed to join tournament");

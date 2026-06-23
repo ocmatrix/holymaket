@@ -1,7 +1,10 @@
-import { Controller, Get, Post, Body, Param, Query, Logger } from '@nestjs/common';
+import { Controller, Get, Post, Body, Query, Logger, UseGuards } from '@nestjs/common';
 import { PlaygroundService } from './playground.service';
 import { MarketOutcome } from '@prisma/client';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { JwtPayload } from '../auth/jwt.service';
 @ApiTags('playground')
 @Controller('playground')
 export class PlaygroundController {
@@ -15,18 +18,20 @@ export class PlaygroundController {
         return this.playgroundService.getAgents(userId);
     }
     @Post('battle')
+    @UseGuards(JwtAuthGuard)
     @ApiOperation({ summary: '开始一场 AI 对战' })
     async startBattle(
+    @CurrentUser()
+    currentUser: JwtPayload,
     @Body()
     body: {
-        userId: string;
         agentId: string;
         userPick: MarketOutcome;
         language?: string;
         amount?: number;
     }) {
         try {
-            return await this.playgroundService.startBattle(body.userId, body.agentId, body.userPick, body.language, body.amount);
+            return await this.playgroundService.startBattle(currentUser.sub, body.agentId, body.userPick, body.language, body.amount);
         }
         catch (error) {
             this.logger.error(`[BATTLE_ERROR] ${error.message}`, error.stack);
@@ -34,19 +39,21 @@ export class PlaygroundController {
         }
     }
     @Get('recent/:userId')
+    @UseGuards(JwtAuthGuard)
     @ApiOperation({ summary: '获取用户最近的对战记录' })
     getRecentBattles(
-    @Param('userId')
-    userId: string, 
+    @CurrentUser()
+    currentUser: JwtPayload,
     @Query('limit')
     limit?: string) {
-        return this.playgroundService.getRecentBattles(userId, limit ? parseInt(limit, 10) : undefined);
+        return this.playgroundService.getRecentBattles(currentUser.sub, limit ? parseInt(limit, 10) : undefined);
     }
     @Get('stats/:userId')
+    @UseGuards(JwtAuthGuard)
     @ApiOperation({ summary: '获取用户 Battle 统计（对战胜率、净盈亏、ROI）' })
     getBattleStats(
-    @Param('userId')
-    userId: string) {
-        return this.playgroundService.getBattleStats(userId);
+    @CurrentUser()
+    currentUser: JwtPayload) {
+        return this.playgroundService.getBattleStats(currentUser.sub);
     }
 }

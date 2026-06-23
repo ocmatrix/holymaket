@@ -45,7 +45,7 @@ function Web3ErrorFallback({ error, resetErrorBoundary }: {
 export function Web3Provider({ children }: {
     children: React.ReactNode;
 }) {
-    const queryClientRef = useRef<QueryClient>();
+    const queryClientRef = useRef<QueryClient | null>(null);
     if (!queryClientRef.current) {
         queryClientRef.current = getQueryClient();
     }

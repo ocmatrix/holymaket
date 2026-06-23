@@ -37,8 +37,8 @@ export function useXMarketWrite() {
         writeContract({
             address: marketAddress,
             abi: binaryPredictionMarketAbi,
-            functionName: "buy",
-            args: [amount, minSharesOut, isYes],
+            functionName: isYes ? "buyYes" : "buyNo",
+            args: [amount, minSharesOut],
         });
     };
 
@@ -46,8 +46,8 @@ export function useXMarketWrite() {
         writeContract({
             address: marketAddress,
             abi: binaryPredictionMarketAbi,
-            functionName: "sell",
-            args: [sharesIn, minCollateralOut, isYes],
+            functionName: isYes ? "sellYes" : "sellNo",
+            args: [sharesIn, minCollateralOut],
         });
     };
 

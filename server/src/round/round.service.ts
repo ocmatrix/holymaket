@@ -259,7 +259,6 @@ export class RoundService implements OnModuleInit {
         });
         const formattedAmm = ammTrades.map((t) => ({
             id: t.id,
-            userId: t.userId,
             user: t.user,
             amount: t.amount,
             position: t.side,
@@ -275,7 +274,6 @@ export class RoundService implements OnModuleInit {
         });
         const formattedBets = bets.map((b) => ({
             id: b.id,
-            userId: b.userId,
             user: b.user,
             amount: b.amount,
             position: b.position,

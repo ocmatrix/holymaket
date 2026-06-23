@@ -111,7 +111,7 @@ export default function Dashboard() {
             {logs?.bets?.map((bet: any) => (<div key={bet.id} className="border-b border-border pb-2 opacity-60 hover:opacity-100 transition-opacity">
                 <p className="text-muted-foreground">[{new Date(bet.timestamp).toLocaleTimeString()}] <span className="text-admin-accent">PREDICTION</span></p>
                 <p className="mt-1 italic">
-                  {bet.user?.username || 'ANON'} -> {bet.position} @ {bet.market?.title}
+                  {bet.user?.username || 'ANON'} {'=>'} {bet.position} @ {bet.market?.title}
                 </p>
                 <p className="text-white font-bold tracking-widest">WAGER: {bet.amount} PTS</p>
               </div>))}

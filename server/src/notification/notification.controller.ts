@@ -2,56 +2,14 @@ import { Controller, Get, Post, Put, Delete, Param, Query, Body, UseGuards } fro
 import { ApiTags, ApiOperation, ApiParam, ApiQuery, ApiBody } from '@nestjs/swagger';
 import { NotificationService } from './notification.service';
 import { AdminTokenGuard } from '../auth/guards/admin-token.guard';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { JwtPayload } from '../auth/jwt.service';
 @ApiTags('notification')
 @Controller('notification')
 export class NotificationController {
     constructor(private readonly notificationService: NotificationService) { }
-    @Get(':userId')
-    @ApiOperation({ summary: '获取用户通知列表' })
-    @ApiParam({ name: 'userId', description: '用户 ID' })
-    @ApiQuery({ name: 'page', required: false, description: '页码，默认 1' })
-    @ApiQuery({ name: 'limit', required: false, description: '每页数量，默认 20' })
-    async getNotifications(
-    @Param('userId')
-    userId: string, 
-    @Query('page')
-    page?: string, 
-    @Query('limit')
-    limit?: string) {
-        return this.notificationService.getNotifications(userId, page ? parseInt(page) : 1, limit ? parseInt(limit) : 20);
-    }
-    @Get('unread-count/:userId')
-    @ApiOperation({ summary: '获取未读通知数量' })
-    @ApiParam({ name: 'userId', description: '用户 ID' })
-    async getUnreadCount(
-    @Param('userId')
-    userId: string) {
-        return this.notificationService.getUnreadCount(userId);
-    }
-    @Put(':id/read')
-    @ApiOperation({ summary: '标记单条通知为已读' })
-    @ApiParam({ name: 'id', description: '通知 ID' })
-    async markAsRead(
-    @Param('id')
-    id: string) {
-        return this.notificationService.markAsRead(id);
-    }
-    @Put('read-all/:userId')
-    @ApiOperation({ summary: '标记所有通知为已读' })
-    @ApiParam({ name: 'userId', description: '用户 ID' })
-    async markAllAsRead(
-    @Param('userId')
-    userId: string) {
-        return this.notificationService.markAllAsRead(userId);
-    }
-    @Delete(':id')
-    @ApiOperation({ summary: '删除通知' })
-    @ApiParam({ name: 'id', description: '通知 ID' })
-    async deleteNotification(
-    @Param('id')
-    id: string) {
-        return this.notificationService.deleteNotification(id);
-    }
+
     @Get('admin/all')
     @UseGuards(AdminTokenGuard)
     @ApiOperation({ summary: '[管理员] 获取所有通知' })
@@ -59,10 +17,66 @@ export class NotificationController {
     @ApiQuery({ name: 'limit', required: false })
     async getAllNotifications(
     @Query('page')
-    page?: string, 
+    page?: string,
     @Query('limit')
     limit?: string) {
         return this.notificationService.getAllNotifications(page ? parseInt(page) : 1, limit ? parseInt(limit) : 20);
+    }
+
+    @Get(':userId')
+    @UseGuards(JwtAuthGuard)
+    @ApiOperation({ summary: '获取用户通知列表' })
+    @ApiParam({ name: 'userId', description: '用户 ID' })
+    @ApiQuery({ name: 'page', required: false, description: '页码，默认 1' })
+    @ApiQuery({ name: 'limit', required: false, description: '每页数量，默认 20' })
+    async getNotifications(
+    @CurrentUser()
+    currentUser: JwtPayload,
+    @Query('page')
+    page?: string,
+    @Query('limit')
+    limit?: string) {
+        return this.notificationService.getNotifications(currentUser.sub, page ? parseInt(page) : 1, limit ? parseInt(limit) : 20);
+    }
+    @Get('unread-count/:userId')
+    @UseGuards(JwtAuthGuard)
+    @ApiOperation({ summary: '获取未读通知数量' })
+    @ApiParam({ name: 'userId', description: '用户 ID' })
+    async getUnreadCount(
+    @CurrentUser()
+    currentUser: JwtPayload) {
+        return this.notificationService.getUnreadCount(currentUser.sub);
+    }
+    @Put(':id/read')
+    @UseGuards(JwtAuthGuard)
+    @ApiOperation({ summary: '标记单条通知为已读' })
+    @ApiParam({ name: 'id', description: '通知 ID' })
+    async markAsRead(
+    @CurrentUser()
+    currentUser: JwtPayload,
+    @Param('id')
+    id: string) {
+        return this.notificationService.markAsReadForUser(id, currentUser.sub);
+    }
+    @Put('read-all/:userId')
+    @UseGuards(JwtAuthGuard)
+    @ApiOperation({ summary: '标记所有通知为已读' })
+    @ApiParam({ name: 'userId', description: '用户 ID' })
+    async markAllAsRead(
+    @CurrentUser()
+    currentUser: JwtPayload) {
+        return this.notificationService.markAllAsRead(currentUser.sub);
+    }
+    @Delete(':id')
+    @UseGuards(JwtAuthGuard)
+    @ApiOperation({ summary: '删除通知' })
+    @ApiParam({ name: 'id', description: '通知 ID' })
+    async deleteNotification(
+    @CurrentUser()
+    currentUser: JwtPayload,
+    @Param('id')
+    id: string) {
+        return this.notificationService.deleteNotificationForUser(id, currentUser.sub);
     }
     @Post('admin/send')
     @UseGuards(AdminTokenGuard)

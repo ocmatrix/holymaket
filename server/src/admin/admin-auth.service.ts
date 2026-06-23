@@ -16,27 +16,32 @@ export class AdminAuthService implements OnModuleInit {
     private readonly LOCK_DURATION = 15 * 60 * 1000;
     private loginAttempts = new Map<string, LoginAttempt>();
     constructor(private prisma: PrismaService) {
-        this.JWT_SECRET = process.env.ADMIN_JWT_SECRET || process.env.JWT_SECRET || 'admin-fallback-secret-change-me';
+        this.JWT_SECRET = process.env.ADMIN_JWT_SECRET || process.env.JWT_SECRET;
+        if (!this.JWT_SECRET) {
+            throw new Error('ADMIN_JWT_SECRET or JWT_SECRET must be set for admin authentication');
+        }
     }
     async onModuleInit() {
         try {
             const adminCount = await this.prisma.adminUser.count();
             if (adminCount === 0) {
-                const defaultUsername = process.env.ADMIN_USERNAME || 'admin';
-                const defaultPassword = process.env.ADMIN_PASSWORD || 'admin123456';
-                const hash = await bcrypt.hash(defaultPassword, 12);
+                const bootstrapUsername = process.env.ADMIN_BOOTSTRAP_USERNAME;
+                const bootstrapPassword = process.env.ADMIN_BOOTSTRAP_PASSWORD;
+                if (!bootstrapUsername || !bootstrapPassword) {
+                    this.logger.warn('No admin users exist. Set ADMIN_BOOTSTRAP_USERNAME and ADMIN_BOOTSTRAP_PASSWORD for first-run bootstrap.');
+                    return;
+                }
+                const hash = await bcrypt.hash(bootstrapPassword, 12);
                 await this.prisma.adminUser.create({
                     data: {
-                        username: defaultUsername,
+                        username: bootstrapUsername,
                         passwordHash: hash,
                         role: 'super_admin',
                     },
                 });
                 this.logger.warn(`========================================`);
-                this.logger.warn(`Default admin account created:`);
-                this.logger.warn(`  Username: ${defaultUsername}`);
-                this.logger.warn(`  Password: ${defaultPassword}`);
-                this.logger.warn(`  PLEASE CHANGE THE PASSWORD IMMEDIATELY!`);
+                this.logger.warn(`Bootstrap admin account created: ${bootstrapUsername}`);
+                this.logger.warn(`Rotate ADMIN_BOOTSTRAP_PASSWORD after first login.`);
                 this.logger.warn(`========================================`);
             }
         }

@@ -3,6 +3,7 @@ import React, { createContext, useContext, useEffect, useState, useRef, useMemo 
 import { io, Socket } from 'socket.io-client';
 import { useAuth } from '../../hooks/use-auth';
 import { useQueryClient } from '@tanstack/react-query';
+import { useAuthStore } from '@/stores/auth-store';
 interface SocketContextType {
     socket: Socket | null;
     isConnected: boolean;
@@ -20,10 +21,18 @@ export function SocketProvider({ children }: {
     const { user } = useAuth();
     const queryClient = useQueryClient();
     const socketRef = useRef<Socket | null>(null);
+    const authToken = useAuthStore(s => s.token);
     useEffect(() => {
+        if (!user?.id) {
+            return;
+        }
+        const token = authToken;
+        if (!token) {
+            return;
+        }
         const wsUrl = process.env.NEXT_PUBLIC_WS_URL || 'http://localhost:3001';
         const socketInstance = io(wsUrl, {
-            query: { userId: 'guest' },
+            auth: { token },
             autoConnect: true,
             reconnection: true,
             reconnectionDelay: 1000,
@@ -40,13 +49,9 @@ export function SocketProvider({ children }: {
             socketInstance.off('connect', onConnect);
             socketInstance.off('disconnect', onDisconnect);
             socketInstance.disconnect();
+            setSocket(null);
         };
-    }, []);
-    useEffect(() => {
-        if (socketRef.current?.connected && user?.id) {
-            socketRef.current.emit('authenticate', { userId: user.id });
-        }
-    }, [user?.id]);
+    }, [user?.id, authToken]);
     useEffect(() => {
         if (socket && user?.id) {
             const userId = user.id;
@@ -80,16 +85,16 @@ export function SocketProvider({ children }: {
             const roundStartHandler = (data: any) => {
                 queryClient.invalidateQueries({ queryKey: ["markets"] });
             };
-            socket.on(`taskUpdate:${userId}`, taskUpdateHandler);
-            socket.on(`balanceUpdate:${userId}`, balanceUpdateHandler);
-            socket.on(`betSuccess:${userId}`, betSuccessHandler);
+            socket.on('taskUpdate', taskUpdateHandler);
+            socket.on('balanceUpdate', balanceUpdateHandler);
+            socket.on('betSuccess', betSuccessHandler);
             socket.on('systemBroadcast', systemBroadcastHandler);
             socket.on('roundSettled', roundSettledHandler);
             socket.on('roundStart', roundStartHandler);
             return () => {
-                socket.off(`taskUpdate:${userId}`, taskUpdateHandler);
-                socket.off(`balanceUpdate:${userId}`, balanceUpdateHandler);
-                socket.off(`betSuccess:${userId}`, betSuccessHandler);
+                socket.off('taskUpdate', taskUpdateHandler);
+                socket.off('balanceUpdate', balanceUpdateHandler);
+                socket.off('betSuccess', betSuccessHandler);
                 socket.off('systemBroadcast', systemBroadcastHandler);
                 socket.off('roundSettled', roundSettledHandler);
                 socket.off('roundStart', roundStartHandler);

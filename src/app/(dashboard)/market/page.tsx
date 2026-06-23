@@ -283,7 +283,7 @@ export default function C10MarketPage() {
                 : 'bg-white/[0.02] border-white/5 text-white/60 hover:bg-white/[0.05] hover:text-white hover:border-white/10'}`}>
               
               <span className={`transition-transform duration-300 flex-shrink-0 ${activeTab === cat.id ? 'scale-110' : 'group-hover:scale-110'}`}>
-                {React.cloneElement(cat.icon as React.ReactElement, { className: 'w-5 h-5 sm:w-6 sm:h-6' })}
+                {React.cloneElement(cat.icon as React.ReactElement<{ className?: string }>, { className: 'w-5 h-5 sm:w-6 sm:h-6' })}
               </span>
               <div className="text-left min-w-0">
                 <div className="text-xs sm:text-sm font-bold truncate">{cat.name}</div>

@@ -2,9 +2,6 @@ const path = require("path");
 
 const nextConfig = {
   reactStrictMode: true,
-  typescript: {
-    ignoreBuildErrors: true,
-  },
   output: 'standalone',
   productionBrowserSourceMaps: false,
   /** 避免误用上级目录（如 C:\\Users\\admin）的 package-lock 作为 monorepo 根，影响解析与追踪 */

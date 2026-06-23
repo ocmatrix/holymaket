@@ -31,7 +31,19 @@ export class TournamentService {
         });
         if (!tournament)
             throw new NotFoundException('Tournament not found');
-        return tournament;
+        return {
+            ...tournament,
+            participants: tournament.participants.map((participant) => ({
+                score: participant.score,
+                wins: participant.wins,
+                losses: participant.losses,
+                eliminated: participant.eliminated,
+                user: {
+                    username: participant.user?.username,
+                    address: participant.user?.address
+                }
+            }))
+        };
     }
     async joinTournament(_userId: string, _tournamentId: string) {
         throw new BadRequestException('样品演示：锦标赛报名/扣费已禁用');
@@ -62,7 +74,14 @@ export class TournamentService {
         });
         return participants.map((p, index) => ({
             rank: index + 1,
-            ...p
+            score: p.score,
+            wins: p.wins,
+            losses: p.losses,
+            eliminated: p.eliminated,
+            user: {
+                username: p.user?.username,
+                address: p.user?.address
+            }
         }));
     }
     @Cron('0 0 * * *')

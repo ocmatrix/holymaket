@@ -1,5 +1,5 @@
 import { Controller, Post, Get, Body, Param, Query, Ip, UseGuards, Delete } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiSecurity } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { LicenseService } from './license.service';
 import { AdminGuard } from '../admin/admin.guard';
 
@@ -40,7 +40,7 @@ export class LicenseController {
 
   @Get('admin/stats')
   @UseGuards(AdminGuard)
-  @ApiSecurity('admin-token')
+  @ApiBearerAuth()
   @ApiOperation({ summary: '获取统计信息' })
   async getStats() {
     return this.licenseService.getStats();
@@ -48,7 +48,7 @@ export class LicenseController {
 
   @Get('admin/licenses')
   @UseGuards(AdminGuard)
-  @ApiSecurity('admin-token')
+  @ApiBearerAuth()
   @ApiOperation({ summary: '获取所有授权' })
   async getAllLicenses() {
     return this.licenseService.getAllLicenses();
@@ -56,7 +56,7 @@ export class LicenseController {
 
   @Get('admin/license/:key')
   @UseGuards(AdminGuard)
-  @ApiSecurity('admin-token')
+  @ApiBearerAuth()
   @ApiOperation({ summary: '获取单个授权详情' })
   async getLicense(@Param('key') key: string) {
     return this.licenseService.getLicenseByKey(key);
@@ -64,7 +64,7 @@ export class LicenseController {
 
   @Post('admin/license/create')
   @UseGuards(AdminGuard)
-  @ApiSecurity('admin-token')
+  @ApiBearerAuth()
   @ApiOperation({ summary: '创建新授权' })
   async createLicense(
     @Body() body: {
@@ -84,7 +84,7 @@ export class LicenseController {
 
   @Post('admin/license/revoke')
   @UseGuards(AdminGuard)
-  @ApiSecurity('admin-token')
+  @ApiBearerAuth()
   @ApiOperation({ summary: '吊销授权' })
   async revokeLicense(
     @Body() body: { licenseKey: string; reason?: string },
@@ -94,7 +94,7 @@ export class LicenseController {
 
   @Post('admin/license/restore')
   @UseGuards(AdminGuard)
-  @ApiSecurity('admin-token')
+  @ApiBearerAuth()
   @ApiOperation({ summary: '恢复授权' })
   async restoreLicense(@Body() body: { licenseKey: string }) {
     return this.licenseService.restoreLicense(body.licenseKey);
@@ -102,7 +102,7 @@ export class LicenseController {
 
   @Post('admin/license/extend')
   @UseGuards(AdminGuard)
-  @ApiSecurity('admin-token')
+  @ApiBearerAuth()
   @ApiOperation({ summary: '延期授权' })
   async extendLicense(
     @Body() body: { licenseKey: string; newExpiresAt: string },
@@ -115,7 +115,7 @@ export class LicenseController {
 
   @Get('admin/license/:key/heartbeats')
   @UseGuards(AdminGuard)
-  @ApiSecurity('admin-token')
+  @ApiBearerAuth()
   @ApiOperation({ summary: '获取心跳记录' })
   async getHeartbeats(
     @Param('key') key: string,
@@ -126,7 +126,7 @@ export class LicenseController {
 
   @Post('admin/license/reset-fingerprints')
   @UseGuards(AdminGuard)
-  @ApiSecurity('admin-token')
+  @ApiBearerAuth()
   @ApiOperation({ summary: '重置硬件绑定' })
   async resetFingerprints(@Body() body: { licenseKey: string }) {
     return this.licenseService.resetFingerprints(body.licenseKey);
@@ -134,7 +134,7 @@ export class LicenseController {
 
   @Delete('admin/license/:key')
   @UseGuards(AdminGuard)
-  @ApiSecurity('admin-token')
+  @ApiBearerAuth()
   @ApiOperation({ summary: '删除授权' })
   async deleteLicense(@Param('key') key: string) {
     return this.licenseService.deleteLicense(key);

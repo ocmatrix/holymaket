@@ -6,7 +6,7 @@
   "scripts": {
     "start": "nest start",
     "start:dev": "npx ts-node --transpile-only src/main.ts",
-    "build": "tsc -p tsconfig.json || true",
+    "build": "tsc -p tsconfig.json",
     "compile": "node scripts/compile.js",
     "build:prod": "npm run build && npm run compile",
     "test": "echo \"Error: no test specified\" && exit 1"
@@ -27,8 +27,7 @@
     "@nestjs/throttler": "^6.5.0",
     "@nestjs/websockets": "^11.1.12",
     "@prisma/adapter-pg": "^7.3.0",
-    "@privy-io/react-auth": "^3.10.2",
-    "@react-native-async-storage/async-storage": "^1.24.0",
+    "@privy-io/node": "^0.22.0",
     "@types/jsonwebtoken": "^9.0.10",
     "axios": "^1.13.3",
     "bcryptjs": "^3.0.3",
@@ -42,7 +41,6 @@
     "helmet": "^8.1.0",
     "jsonwebtoken": "^9.0.3",
     "pg": "^8.17.2",
-    "react-error-boundary": "^6.1.0",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.2",
     "socket.io": "^4.8.3",
@@ -58,5 +56,10 @@
     "concurrently": "^9.2.1",
     "prisma": "^6.19.2",
     "ts-node": "^10.9.2"
+  },
+  "overrides": {
+    "js-yaml": "^5.1.0",
+    "multer": "^2.2.0",
+    "ws": "^8.21.0"
   }
 }

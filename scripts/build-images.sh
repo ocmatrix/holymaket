@@ -31,6 +31,8 @@ NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-https://superoctopus.fun/api}
 NEXT_PUBLIC_WS_URL=${NEXT_PUBLIC_WS_URL:-wss://superoctopus.fun}
 PRIVY_APP_ID=${PRIVY_APP_ID:-}
 NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID=${NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID:-}
+NEXT_PUBLIC_XMARKET_INDEXER_API_BASE_URL=${NEXT_PUBLIC_XMARKET_INDEXER_API_BASE_URL:-}
+NEXT_PUBLIC_BSC_TESTNET_RPC_URL=${NEXT_PUBLIC_BSC_TESTNET_RPC_URL:-}
 
 echo -e "${YELLOW}构建参数:${NC}"
 echo "  API_URL: $NEXT_PUBLIC_API_URL"
@@ -40,7 +42,7 @@ echo ""
 # ============================================
 # 1. 构建后端镜像 (context = server/)
 # ============================================
-echo -e "${YELLOW}[1/3] 构建后端镜像 (NestJS + Bytenode)...${NC}"
+echo -e "${YELLOW}[1/4] 构建后端镜像 (NestJS + Bytenode)...${NC}"
 docker build \
   -t aixl/backend:latest \
   -t aixl/backend:v1.0 \
@@ -51,7 +53,7 @@ echo -e "${GREEN}✅ 后端镜像构建完成${NC}"
 # ============================================
 # 2. 构建前端镜像 (context = ./)
 # ============================================
-echo -e "${YELLOW}[2/3] 构建前端镜像 (Next.js)...${NC}"
+echo -e "${YELLOW}[2/4] 构建前端镜像 (Next.js)...${NC}"
 docker build \
   -t aixl/frontend:latest \
   -t aixl/frontend:v1.0 \
@@ -59,6 +61,8 @@ docker build \
   --build-arg NEXT_PUBLIC_WS_URL="$NEXT_PUBLIC_WS_URL" \
   --build-arg NEXT_PUBLIC_PRIVY_APP_ID="$PRIVY_APP_ID" \
   --build-arg NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID="$NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID" \
+  --build-arg NEXT_PUBLIC_XMARKET_INDEXER_API_BASE_URL="$NEXT_PUBLIC_XMARKET_INDEXER_API_BASE_URL" \
+  --build-arg NEXT_PUBLIC_BSC_TESTNET_RPC_URL="$NEXT_PUBLIC_BSC_TESTNET_RPC_URL" \
   .
 
 echo -e "${GREEN}✅ 前端镜像构建完成${NC}"
@@ -66,7 +70,7 @@ echo -e "${GREEN}✅ 前端镜像构建完成${NC}"
 # ============================================
 # 3. 构建管理后台镜像 (context = admin-web/)
 # ============================================
-echo -e "${YELLOW}[3/3] 构建管理后台镜像 (Admin)...${NC}"
+echo -e "${YELLOW}[3/4] 构建管理后台镜像 (Admin)...${NC}"
 
 ADMIN_API_URL=${NEXT_PUBLIC_ADMIN_API_URL:-https://superoctopus.fun/api}
 ADMIN_WS_URL=${NEXT_PUBLIC_ADMIN_WS_URL:-wss://superoctopus.fun}
@@ -79,6 +83,18 @@ docker build \
   ./admin-web
 
 echo -e "${GREEN}✅ 管理后台镜像构建完成${NC}"
+
+# ============================================
+# 4. 构建 Indexer 镜像
+# ============================================
+echo -e "${YELLOW}[4/4] 构建 Indexer 镜像...${NC}"
+
+docker build \
+  -t aixl/indexer:latest \
+  -t aixl/indexer:v1.0 \
+  ./indexer
+
+echo -e "${GREEN}✅ Indexer 镜像构建完成${NC}"
 
 # ============================================
 # 4. 验证镜像
@@ -104,6 +120,9 @@ docker save aixl/frontend:latest | gzip > "$EXPORT_DIR/aixl-frontend.tar.gz"
 
 echo "导出管理后台镜像..."
 docker save aixl/admin:latest | gzip > "$EXPORT_DIR/aixl-admin.tar.gz"
+
+echo "导出 Indexer 镜像..."
+docker save aixl/indexer:latest | gzip > "$EXPORT_DIR/aixl-indexer.tar.gz"
 
 # ============================================
 # 6. 显示文件大小

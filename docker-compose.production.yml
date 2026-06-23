@@ -63,23 +63,84 @@ services:
       # 安全
       JWT_SECRET: ${JWT_SECRET}
       JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET}
-      ADMIN_TOKEN: ${ADMIN_TOKEN}
       ADMIN_JWT_SECRET: ${ADMIN_JWT_SECRET}
-      ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
-      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-admin123456}
-      CORS_ORIGINS: ${CORS_ORIGINS:-https://admin.superoctopus.fun}
+      ADMIN_BOOTSTRAP_USERNAME: ${ADMIN_BOOTSTRAP_USERNAME}
+      ADMIN_BOOTSTRAP_PASSWORD: ${ADMIN_BOOTSTRAP_PASSWORD}
+      CORS_ORIGINS: ${CORS_ORIGINS}
+      SWAGGER_ENABLED: ${SWAGGER_ENABLED:-false}
       # 第三方服务
       PRIVY_APP_ID: ${PRIVY_APP_ID}
       PRIVY_APP_SECRET: ${PRIVY_APP_SECRET}
       OPENAI_API_KEY: ${OPENAI_API_KEY}
       PANDASCORE_API_KEY: ${PANDASCORE_API_KEY}
       FOOTBALL_API_KEY: ${FOOTBALL_API_KEY}
+      XMARKET_ADMIN_RPC_URL: ${XMARKET_ADMIN_RPC_URL}
+      XMARKET_ADMIN_PRIVATE_KEY: ${XMARKET_ADMIN_PRIVATE_KEY}
+      XMARKET_MARKET_FACTORY_ADDRESS: ${XMARKET_MARKET_FACTORY_ADDRESS:-0x45ab369f65c0ef44c1325323f283e6acc92b8bd0}
+      XMARKET_COLLATERAL_ADDRESS: ${XMARKET_COLLATERAL_ADDRESS:-0xb90278a476319CbDAd259e4fEAA8E7d9Da05e1EB}
+      XMARKET_COLLATERAL_DECIMALS: ${XMARKET_COLLATERAL_DECIMALS:-6}
+      XMARKET_DEFAULT_INITIAL_COLLATERAL: ${XMARKET_DEFAULT_INITIAL_COLLATERAL:-1000000}
+      XMARKET_DEFAULT_INITIAL_PRICE_YES_BPS: ${XMARKET_DEFAULT_INITIAL_PRICE_YES_BPS:-5000}
+      XMARKET_DEFAULT_MIN_TRADE_AMOUNT: ${XMARKET_DEFAULT_MIN_TRADE_AMOUNT:-1}
+      XMARKET_DEFAULT_MAX_TRADE_AMOUNT: ${XMARKET_DEFAULT_MAX_TRADE_AMOUNT:-100000}
+      XMARKET_DEFAULT_MAX_SLIPPAGE_BPS: ${XMARKET_DEFAULT_MAX_SLIPPAGE_BPS:-500}
+      XMARKET_DEFAULT_FEE_BPS: ${XMARKET_DEFAULT_FEE_BPS:-50}
     healthcheck:
       test: ["CMD", "wget", "-q", "--spider", "http://localhost:3001/health"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 30s
+    networks:
+      - aixl-network
+
+  # ============ Indexer API ============
+  indexer-api:
+    image: aixl/indexer:latest
+    container_name: aixl-indexer-api
+    restart: always
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: sh -c "npx prisma migrate deploy && npm run api"
+    environment:
+      DATABASE_URL: postgresql://${DB_USER:-aixl}:${DB_PASSWORD}@postgres:5432/${DB_NAME:-aixl}?schema=${INDEXER_DB_SCHEMA:-indexer}
+      BSC_TESTNET_RPC_URL: ${INDEXER_RPC_URL}
+      INDEXER_CHAIN_ID: ${INDEXER_CHAIN_ID:-97}
+      INDEXER_START_BLOCK: ${INDEXER_START_BLOCK:-0}
+      INDEXER_CONFIRMATIONS: ${INDEXER_CONFIRMATIONS:-12}
+      INDEXER_BATCH_SIZE: ${INDEXER_BATCH_SIZE:-5000}
+      INDEXER_MAX_BLOCKS_PER_RUN: ${INDEXER_MAX_BLOCKS_PER_RUN:-20000}
+      INDEXER_API_PORT: 4000
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:4000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    networks:
+      - aixl-network
+
+  # ============ Indexer Sync Worker ============
+  indexer-sync:
+    image: aixl/indexer:latest
+    container_name: aixl-indexer-sync
+    restart: always
+    depends_on:
+      postgres:
+        condition: service_healthy
+      indexer-api:
+        condition: service_started
+    command: sh -c "npx prisma migrate deploy && while true; do npm run sync; sleep ${INDEXER_SYNC_INTERVAL_SECONDS:-15}; done"
+    environment:
+      DATABASE_URL: postgresql://${DB_USER:-aixl}:${DB_PASSWORD}@postgres:5432/${DB_NAME:-aixl}?schema=${INDEXER_DB_SCHEMA:-indexer}
+      BSC_TESTNET_RPC_URL: ${INDEXER_RPC_URL}
+      INDEXER_CHAIN_ID: ${INDEXER_CHAIN_ID:-97}
+      INDEXER_START_BLOCK: ${INDEXER_START_BLOCK:-0}
+      INDEXER_CONFIRMATIONS: ${INDEXER_CONFIRMATIONS:-12}
+      INDEXER_BATCH_SIZE: ${INDEXER_BATCH_SIZE:-5000}
+      INDEXER_MAX_BLOCKS_PER_RUN: ${INDEXER_MAX_BLOCKS_PER_RUN:-20000}
+      INDEXER_API_PORT: 4000
     networks:
       - aixl-network
 
@@ -96,6 +157,7 @@ services:
       NEXT_PUBLIC_WS_URL: ${NEXT_PUBLIC_WS_URL:-wss://superoctopus.fun}
       NEXT_PUBLIC_PRIVY_APP_ID: ${PRIVY_APP_ID}
       NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID: ${NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID}
+      NEXT_PUBLIC_XMARKET_INDEXER_API_BASE_URL: ${NEXT_PUBLIC_XMARKET_INDEXER_API_BASE_URL:-https://superoctopus.fun/indexer}
     networks:
       - aixl-network
 
@@ -122,6 +184,7 @@ services:
       - frontend
       - backend
       - admin-web
+      - indexer-api
     ports:
       - "80:80"
     volumes:

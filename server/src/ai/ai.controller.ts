@@ -1,6 +1,9 @@
-import { Controller, Get, Post, Body, Param, Query } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Query, UseGuards } from '@nestjs/common';
 import { AIService } from './ai.service';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { JwtPayload } from '../auth/jwt.service';
 @ApiTags('ai')
 @Controller('ai')
 export class AIController {
@@ -27,15 +30,17 @@ export class AIController {
         return this.aiService.analyzeMarket(marketId);
     }
     @Post('chat')
+    @UseGuards(JwtAuthGuard)
     @ApiOperation({ summary: 'AI 问答' })
     async chat(
+    @CurrentUser()
+    currentUser: JwtPayload,
     @Body()
     body: {
-        userId: string;
         question: string;
         marketId?: string;
     }) {
-        return this.aiService.chat(body.userId, body.question, {
+        return this.aiService.chat(currentUser.sub, body.question, {
             marketId: body.marketId
         });
     }

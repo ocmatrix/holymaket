@@ -4,6 +4,9 @@ import { SeasonService } from './season.service';
 import { TournamentService } from './tournament.service';
 import { SpectateService } from './spectate.service';
 import { AdminTokenGuard } from '../auth/guards/admin-token.guard';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { JwtPayload } from '../auth/jwt.service';
 @ApiTags('season')
 @Controller('season')
 export class SeasonController {
@@ -38,16 +41,14 @@ export class SeasonController {
         return this.seasonService.getSeasonLeaderboard(seasonId, limit ? parseInt(limit) : 50);
     }
     @Post(':seasonId/claim-reward')
+    @UseGuards(JwtAuthGuard)
     @ApiOperation({ summary: '领取赛季奖励' })
-    @ApiBody({ schema: { type: 'object', properties: { userId: { type: 'string' } } } })
     async claimSeasonReward(
     @Param('seasonId')
     seasonId: string, 
-    @Body()
-    body: {
-        userId: string;
-    }) {
-        return this.seasonService.claimSeasonReward(body.userId, seasonId);
+    @CurrentUser()
+    currentUser: JwtPayload) {
+        return this.seasonService.claimSeasonReward(currentUser.sub, seasonId);
     }
     @Get('tournaments')
     @ApiOperation({ summary: '获取活跃锦标赛列表' })
@@ -72,28 +73,24 @@ export class SeasonController {
         return this.tournamentService.getTournamentLeaderboard(id, limit ? parseInt(limit) : 50);
     }
     @Post('tournaments/:id/join')
+    @UseGuards(JwtAuthGuard)
     @ApiOperation({ summary: '报名参加锦标赛' })
-    @ApiBody({ schema: { type: 'object', properties: { userId: { type: 'string' } } } })
     async joinTournament(
     @Param('id')
     id: string, 
-    @Body()
-    body: {
-        userId: string;
-    }) {
-        return this.tournamentService.joinTournament(body.userId, id);
+    @CurrentUser()
+    currentUser: JwtPayload) {
+        return this.tournamentService.joinTournament(currentUser.sub, id);
     }
     @Post('tournaments/:id/claim-reward')
+    @UseGuards(JwtAuthGuard)
     @ApiOperation({ summary: '领取锦标赛奖励' })
-    @ApiBody({ schema: { type: 'object', properties: { userId: { type: 'string' } } } })
     async claimTournamentReward(
     @Param('id')
     id: string, 
-    @Body()
-    body: {
-        userId: string;
-    }) {
-        return this.tournamentService.claimTournamentReward(body.userId, id);
+    @CurrentUser()
+    currentUser: JwtPayload) {
+        return this.tournamentService.claimTournamentReward(currentUser.sub, id);
     }
     @Get('live-battles')
     @ApiOperation({ summary: '获取实时对战列表（可观战）' })
@@ -116,31 +113,30 @@ export class SeasonController {
         return this.spectateService.getBattleReplay(id);
     }
     @Post('spectate/:battleId/join')
+    @UseGuards(JwtAuthGuard)
     @ApiOperation({ summary: '加入观战' })
     @ApiBody({ schema: { type: 'object', properties: { userId: { type: 'string' } } } })
     async joinSpectate(
     @Param('battleId')
     battleId: string, 
-    @Body()
-    body: {
-        userId: string;
-    }) {
-        return this.spectateService.joinSpectate(battleId, body.userId);
+    @CurrentUser()
+    currentUser: JwtPayload) {
+        return this.spectateService.joinSpectate(battleId, currentUser.sub);
     }
     @Post('spectate/:battleId/leave')
+    @UseGuards(JwtAuthGuard)
     @ApiOperation({ summary: '离开观战' })
     @ApiBody({ schema: { type: 'object', properties: { userId: { type: 'string' } } } })
     async leaveSpectate(
     @Param('battleId')
     battleId: string, 
-    @Body()
-    body: {
-        userId: string;
-    }) {
-        this.spectateService.leaveSpectate(battleId, body.userId);
+    @CurrentUser()
+    currentUser: JwtPayload) {
+        this.spectateService.leaveSpectate(battleId, currentUser.sub);
         return { success: true };
     }
     @Post('battle/:battleId/toggle-visibility')
+    @UseGuards(JwtAuthGuard)
     @ApiOperation({ summary: '切换对战公开状态' })
     @ApiBody({ schema: {
             type: 'object',
@@ -152,12 +148,13 @@ export class SeasonController {
     async toggleBattleVisibility(
     @Param('battleId')
     battleId: string, 
+    @CurrentUser()
+    currentUser: JwtPayload,
     @Body()
     body: {
-        userId: string;
         isPublic: boolean;
     }) {
-        return this.spectateService.toggleBattleVisibility(battleId, body.userId, body.isPublic);
+        return this.spectateService.toggleBattleVisibility(battleId, currentUser.sub, body.isPublic);
     }
     @Post('admin/create')
     @UseGuards(AdminTokenGuard)
