@@ -77,7 +77,9 @@ LICENSE_FORCE_STOP=false
 # 安全
 JWT_SECRET=CHANGE_ME_jwt_secret_at_least_32_chars
 JWT_REFRESH_SECRET=CHANGE_ME_jwt_refresh_secret
-ADMIN_TOKEN=CHANGE_ME_admin_token
+ADMIN_JWT_SECRET=CHANGE_ME_admin_jwt_secret_at_least_32_chars
+ADMIN_BOOTSTRAP_USERNAME=CHANGE_ME_initial_admin_username
+ADMIN_BOOTSTRAP_PASSWORD=CHANGE_ME_one_time_initial_admin_password
 
 # Privy 认证
 PRIVY_APP_ID=CHANGE_ME
@@ -93,7 +95,8 @@ FOOTBALL_API_KEY=CHANGE_ME
 # 前端 (域名配置 — 构建镜像时已写入，此处供参考)
 NEXT_PUBLIC_API_URL=https://superoctopus.fun/api
 NEXT_PUBLIC_WS_URL=wss://superoctopus.fun
-CORS_ORIGINS=https://admin.superoctopus.fun
+CORS_ORIGINS=https://superoctopus.fun,https://www.superoctopus.fun,https://admin.superoctopus.fun
+SWAGGER_ENABLED=false
 
 # 管理后台
 NEXT_PUBLIC_ADMIN_API_URL=https://superoctopus.fun/api

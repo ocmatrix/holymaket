@@ -26,7 +26,7 @@ check_env() {
     export $(grep -v '^#' .env.production | xargs)
     
     # 检查必需的变量
-    required_vars=("DB_PASSWORD" "LICENSE_KEY" "JWT_SECRET" "ADMIN_TOKEN")
+    required_vars=("DB_PASSWORD" "LICENSE_KEY" "JWT_SECRET" "JWT_REFRESH_SECRET" "ADMIN_JWT_SECRET" "PRIVY_APP_ID" "PRIVY_APP_SECRET" "CORS_ORIGINS")
     for var in "${required_vars[@]}"; do
         if [ -z "${!var}" ]; then
             echo -e "${RED}❌ Missing required variable: $var${NC}"

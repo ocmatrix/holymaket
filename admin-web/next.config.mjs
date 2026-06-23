@@ -1,8 +1,5 @@
 const nextConfig = {
   reactStrictMode: true,
-  typescript: {
-    ignoreBuildErrors: true,
-  },
   output: "standalone",
   onDemandEntries: {
     maxInactiveAge: 25 * 1000,
