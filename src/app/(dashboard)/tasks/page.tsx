@@ -200,7 +200,7 @@ const getTaskTranslation = (task: any, t: any) => {
 };
 const OctoTaskCard = memo(({ task, index, t, onClaim, isPending }: any) => {
     const translation = getTaskTranslation(task, t);
-    const taskIcons: Record<string, JSX.Element> = {
+    const taskIcons: Record<string, React.ReactElement> = {
         't1': <OctoIcons.Target />,
         't2': <OctoIcons.Robot />,
         't3': <OctoIcons.Wallet />,

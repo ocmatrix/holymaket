@@ -5,6 +5,7 @@ import { IndexService } from './index.service';
 import { ExchangePriceService } from './exchange-price.service';
 import { BacktestService } from './backtest.service';
 import { MarketCalendarService } from './market-calendar.service';
+import { MarketChainService } from './market-chain.service';
 import { QuestModule } from '../quest/quest.module';
 import { EventsModule } from '../events/events.module';
 import { AIModule } from '../ai/ai.module';
@@ -16,14 +17,16 @@ import { AIModule } from '../ai/ai.module';
         IndexService,
         ExchangePriceService,
         BacktestService,
-        MarketCalendarService
+        MarketCalendarService,
+        MarketChainService
     ],
     exports: [
         MarketService,
         IndexService,
         ExchangePriceService,
         BacktestService,
-        MarketCalendarService
+        MarketCalendarService,
+        MarketChainService
     ],
 })
 export class MarketModule {

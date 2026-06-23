@@ -46,10 +46,15 @@ enum RoundResult {
   DRAW
 }
 
+enum PositionSide {
+  YES
+  NO
+}
+
 // ======== Core ========
 
 model User {
-  id              String    @id
+  id              String    @id @default(cuid())
   address         String?
   username        String?
   pts             Float     @default(0)
@@ -62,7 +67,7 @@ model User {
   multiplier      Float     @default(1.0)
   onChainBalance  Float     @default(0)
   privyId         String?   @unique
-  referralCode    String    @unique
+  referralCode    String    @unique @default(cuid())
   referrerId      String?
   role            String    @default("USER")
   totalBattles    Int       @default(0)
@@ -72,7 +77,7 @@ model User {
 
   team            Team?              @relation(fields: [teamId], references: [id], onDelete: SetNull)
   referrer        User?              @relation("ReferralRelation", fields: [referrerId], references: [id], onDelete: SetNull)
-  referred        User[]             @relation("ReferralRelation")
+  referrals       User[]             @relation("ReferralRelation")
   bets            Bet[]
   battles         Battle[]
   userTasks       UserTask[]
@@ -86,12 +91,14 @@ model User {
   notifications   Notification[]
   esportsBets     EsportsBet[]
   footballBets    FootballBet[]
+  positions       Position[]
+  ammTrades       AMMTrade[]
 
   @@unique([address])
 }
 
 model Market {
-  id             String        @id
+  id             String        @id @default(cuid())
   title          String
   status         MarketStatus  @default(ACTIVE)
   endTime        DateTime
@@ -114,7 +121,7 @@ model Market {
 }
 
 model Bet {
-  id             String        @id
+  id             String        @id @default(cuid())
   userId         String
   marketId       String
   position       MarketOutcome
@@ -145,7 +152,7 @@ model Bet {
 }
 
 model Agent {
-  id             String  @id
+  id             String  @id @default(cuid())
   name           String
   description    String
   level          String
@@ -160,7 +167,7 @@ model Agent {
 }
 
 model Battle {
-  id             String   @id
+  id             String   @id @default(cuid())
   userId         String
   agentId        String
   userPick       MarketOutcome
@@ -197,7 +204,7 @@ model Battle {
 // ======== Team ========
 
 model Team {
-  id          String   @id
+  id          String   @id @default(cuid())
   name        String   @unique
   description String?
   totalPts    Float    @default(0)
@@ -214,19 +221,20 @@ model Team {
 // ======== Tasks ========
 
 model Task {
-  id          String  @id
+  id          String  @id @default(cuid())
   title       String
   description String
   reward      Float
   type        String
   goal        Int
   isDaily     Boolean @default(false)
+  createdAt   DateTime @default(now())
 
-  userTasks UserTask[]
+  users UserTask[]
 }
 
 model UserTask {
-  id        String   @id
+  id        String   @id @default(cuid())
   userId    String
   taskId    String
   progress  Int      @default(0)
@@ -243,7 +251,7 @@ model UserTask {
 // ======== Strategy & AI ========
 
 model UserStrategy {
-  id             String   @id
+  id             String   @id @default(cuid())
   userId         String
   name           String
   riskLevel      String   @default("MEDIUM")
@@ -264,7 +272,7 @@ model UserStrategy {
 }
 
 model AISuggestion {
-  id         String        @id
+  id         String        @id @default(cuid())
   userId     String
   marketId   String
   strategyId String?
@@ -284,7 +292,7 @@ model AISuggestion {
 // ======== Season & Tournament ========
 
 model Season {
-  id        String   @id
+  id        String   @id @default(cuid())
   name      String
   type      String
   startDate DateTime
@@ -302,7 +310,7 @@ model Season {
 }
 
 model SeasonRanking {
-  id            String   @id
+  id            String   @id @default(cuid())
   seasonId      String
   userId        String
   totalBattles  Int      @default(0)
@@ -324,7 +332,7 @@ model SeasonRanking {
 }
 
 model Tournament {
-  id          String   @id
+  id          String   @id @default(cuid())
   name        String
   description String?
   type        String
@@ -348,7 +356,7 @@ model Tournament {
 }
 
 model TournamentParticipant {
-  id            String   @id
+  id            String   @id @default(cuid())
   tournamentId  String
   userId        String
   joinedAt      DateTime @default(now())
@@ -370,7 +378,7 @@ model TournamentParticipant {
 // ======== Market Index & Data ========
 
 model MarketIndex {
-  id        String   @id
+  id        String   @id @default(cuid())
   type      String
   value     Float
   change24h Float?
@@ -380,7 +388,7 @@ model MarketIndex {
 }
 
 model IndexWeight {
-  id       String  @id
+  id       String  @id @default(cuid())
   category String  @default("C10")
   symbol   String
   weight   Float
@@ -393,7 +401,7 @@ model IndexWeight {
 }
 
 model MarketSnapshot {
-  id           String   @id
+  id           String   @id @default(cuid())
   marketId     String
   snapshotType String
   timestamp    DateTime @default(now())
@@ -411,7 +419,7 @@ model MarketSnapshot {
 // ======== Transactions ========
 
 model Transaction {
-  id          String    @id
+  id          String    @id @default(cuid())
   userId      String
   type        String
   amount      Float
@@ -431,7 +439,7 @@ model Transaction {
 // ======== System ========
 
 model SystemConfig {
-  id        String   @id
+  id        String   @id @default(cuid())
   key       String   @unique
   value     String
   updatedAt DateTime @updatedAt
@@ -439,7 +447,7 @@ model SystemConfig {
 }
 
 model ContractConfig {
-  id           String   @id
+  id           String   @id @default(cuid())
   name         String
   type         String
   version      String   @default("1.0.0")
@@ -466,7 +474,7 @@ model ContractConfig {
 }
 
 model ContractDeployment {
-  id           String   @id
+  id           String   @id @default(cuid())
   configId     String
   chainId      Int
   address      String
@@ -487,7 +495,7 @@ model ContractDeployment {
 // ======== Round ========
 
 model Round {
-  id            String      @id
+  id            String      @id @default(cuid())
   roundNumber   Int
   category      String      @default("C10")
   startTime     DateTime
@@ -505,15 +513,93 @@ model Round {
   shortBetCount Int         @default(0)
   createdAt     DateTime    @default(now())
 
+  liquidityPool LiquidityPool?
+  positions     Position[]
+  ammTrades     AMMTrade[]
+  priceCandles  PriceCandle[]
+
   @@unique([category, roundNumber])
   @@index([status, endTime])
   @@index([category, roundNumber])
 }
 
+model LiquidityPool {
+  id               String   @id @default(cuid())
+  roundId          String   @unique
+  yesReserve       Float
+  noReserve        Float
+  kConstant        Float
+  initialLiquidity Float
+  yesPrice         Float   @default(0.5)
+  noPrice          Float   @default(0.5)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  round Round @relation(fields: [roundId], references: [id], onDelete: Cascade)
+}
+
+model Position {
+  id               String       @id @default(cuid())
+  userId           String
+  roundId          String
+  side             PositionSide
+  shares           Float        @default(0)
+  totalCost        Float        @default(0)
+  status           String       @default("OPEN")
+  realizedPnL      Float?
+  settlementPayout Float?
+  createdAt        DateTime     @default(now())
+  closedAt         DateTime?
+  settledAt        DateTime?
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Restrict)
+  round Round @relation(fields: [roundId], references: [id], onDelete: Cascade)
+
+  @@index([userId, status])
+  @@index([roundId, status])
+}
+
+model AMMTrade {
+  id        String       @id @default(cuid())
+  userId    String
+  roundId   String
+  side      PositionSide
+  action    String
+  amount    Float
+  shares    Float?
+  price     Float?
+  fee       Float?
+  createdAt DateTime     @default(now())
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Restrict)
+  round Round @relation(fields: [roundId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([roundId, createdAt])
+}
+
+model PriceCandle {
+  id        String   @id @default(cuid())
+  roundId   String
+  interval  String
+  open      Float
+  high      Float
+  low       Float
+  close     Float
+  volume    Float    @default(0)
+  startTime DateTime
+  endTime   DateTime?
+  createdAt DateTime @default(now())
+
+  round Round @relation(fields: [roundId], references: [id], onDelete: Cascade)
+
+  @@index([roundId, interval, startTime])
+}
+
 // ======== Referral & Notification ========
 
 model ReferralReward {
-  id          String   @id
+  id          String   @id @default(cuid())
   referrerId  String
   refereeId   String
   amount      Float
@@ -529,7 +615,7 @@ model ReferralReward {
 }
 
 model Notification {
-  id        String   @id
+  id        String   @id @default(cuid())
   userId    String
   type      String
   title     String
@@ -547,7 +633,7 @@ model Notification {
 // ======== Admin ========
 
 model AdminUser {
-  id           String    @id
+  id           String    @id @default(cuid())
   username     String    @unique
   passwordHash String
   role         String    @default("admin")
@@ -561,7 +647,7 @@ model AdminUser {
 }
 
 model AdminAuditLog {
-  id        String   @id
+  id        String   @id @default(cuid())
   adminId   String
   action    String
   target    String?
@@ -578,8 +664,8 @@ model AdminAuditLog {
 // ======== Esports ========
 
 model EsportsTeam {
-  id         String @id
-  externalId Int    @unique
+  id         String @id @default(cuid())
+  externalId String @unique
   name       String
   shortName  String?
   logo       String?
@@ -590,8 +676,8 @@ model EsportsTeam {
 }
 
 model EsportsMatch {
-  id          String   @id
-  externalId  Int      @unique
+  id          String   @id @default(cuid())
+  externalId  String   @unique
   game        String
   league      String
   leagueLogo  String?
@@ -616,7 +702,7 @@ model EsportsMatch {
 }
 
 model EsportsBet {
-  id         String   @id
+  id         String   @id @default(cuid())
   userId     String
   matchId    String
   prediction String
@@ -634,7 +720,7 @@ model EsportsBet {
 // ======== Football ========
 
 model FootballMatch {
-  id            String   @id
+  id            String   @id @default(cuid())
   fixtureId     Int
   league        String
   leagueLogo    String?
@@ -654,8 +740,11 @@ model FootballMatch {
   homeOdds      Float?
   drawOdds      Float?
   awayOdds      Float?
+  homeBetPool   Float    @default(0)
+  drawBetPool   Float    @default(0)
+  awayBetPool   Float    @default(0)
   venue         String?
-  tvChannels    String?
+  tvChannels    Json?
   settled       Boolean  @default(false)
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
@@ -664,7 +753,7 @@ model FootballMatch {
 }
 
 model FootballBet {
-  id         String   @id
+  id         String   @id @default(cuid())
   userId     String
   matchId    String
   prediction String
@@ -674,6 +763,7 @@ model FootballBet {
   result     String?
   status     String   @default("PENDING")
   createdAt  DateTime @default(now())
+  settledAt  DateTime?
 
   user  User          @relation(fields: [userId], references: [id])
   match FootballMatch @relation(fields: [matchId], references: [id])
