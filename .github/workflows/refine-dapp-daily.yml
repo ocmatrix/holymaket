@@ -1,0 +1,198 @@
+name: refine-dapp-daily
+
+on:
+  schedule:
+    - cron: "0 2 * * *"   # UTC 02:00 每日（北京时间 10:00）
+  workflow_dispatch:
+    inputs:
+      rounds:
+        description: "本次最大轮数"
+        default: "5"
+      fork_block:
+        description: "fork 钉定区块号（留空则由 Claude 在 P0 钉定最新区块）"
+        default: ""
+      target_chain:
+        description: "目标链标识（foundry.toml [rpc_endpoints] 中的 key）"
+        default: "wantos_testnet"
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: refine-dapp-daily
+  cancel-in-progress: false
+
+jobs:
+  refine:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      REFINE_RPC_URL: ${{ secrets.REFINE_READ_RPC_URL }}
+      ROUNDS: ${{ github.event.inputs.rounds || '5' }}
+      FORK_BLOCK: ${{ github.event.inputs.fork_block || '' }}
+      TARGET_CHAIN: ${{ github.event.inputs.target_chain || 'wantos_testnet' }}
+
+    steps:
+      # ── R0 守门 ──────────────────────────────────────────────────────────
+      - name: R0 守门 — 确认未注入任何私钥类机密
+        run: |
+          for k in PRIVATE_KEY MNEMONIC DEPLOYER_KEY WALLET_KEY SIGNER_KEY SEED_PHRASE; do
+            if [ -n "${!k:-}" ]; then
+              echo "::error::检测到禁止的机密 $k — 按 R0 终止，CI 不得持有可动资金私钥"
+              exit 1
+            fi
+          done
+          echo "R0 OK：环境中无私钥类机密"
+
+      # ── 检出 ──────────────────────────────────────────────────────────────
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      # ── 工作分支 ──────────────────────────────────────────────────────────
+      - name: 计算日期与工作分支
+        id: vars
+        run: |
+          D=$(date -u +%Y%m%d)
+          echo "date=$D"                      >> "$GITHUB_OUTPUT"
+          echo "branch=auto/refine-dapp/$D"   >> "$GITHUB_OUTPUT"
+          echo "base=${{ github.event.repository.default_branch }}" >> "$GITHUB_OUTPUT"
+
+      - name: 准备工作分支（同日续跑则复用）
+        run: |
+          B="${{ steps.vars.outputs.branch }}"
+          git fetch origin "$B" 2>/dev/null || true
+          if git show-ref --verify --quiet "refs/remotes/origin/$B"; then
+            git checkout -B "$B" "origin/$B"
+          else
+            git checkout -B "$B"
+          fi
+
+      # ── 工具链 ────────────────────────────────────────────────────────────
+      - name: Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: 1.7.1   # 与 foundry.yml 保持一致
+
+      - name: Slither + solc 0.8.28
+        run: |
+          python3 -m pip install --quiet slither-analyzer solc-select
+          solc-select install 0.8.28 && solc-select use 0.8.28
+
+      # ── Claude Code ───────────────────────────────────────────────────────
+      - name: 运行 refine-dapp（headless，显式加载 SKILL）
+        uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          prompt: |
+            打开并严格遵守文件 .claude/skills/refine-dapp/SKILL.md 的全部规则，
+            执行每日 DApp 轮巡式自迭代。
+
+            注意：headless 模式下技能不会自动触发，你必须先 Read 该文件，
+            然后按其 P0→P6 流程与全部门禁/禁止清单作业。
+
+            运行参数：
+            - 当前工作分支：${{ steps.vars.outputs.branch }}（所有 git commit 只落此分支）
+            - 最大轮数：${{ env.ROUNDS }}
+            - 目标链：${{ env.TARGET_CHAIN }}
+            - fork 钉定区块：${{ env.FORK_BLOCK }}（为空则在 P0 取最新区块并写入状态文件）
+            - 只读 fork RPC 从环境变量 REFINE_RPC_URL 读取
+            - Foundry 工作目录：contracts/
+            - forge test / forge build 均在 contracts/ 目录下执行
+
+            绝对禁止：
+            - 广播任何交易 / 部署合约 / 动用真实资金
+            - 读取或打印私钥 / 助记词
+            - 修改 .github/ 或 .claude/ 目录
+
+            收尾要求：
+            - 把日报写入 .refine-dapp/report-${{ steps.vars.outputs.date }}.md
+            - 只做本地 git commit；不要执行 git push、也不要开 PR（由后续 CI 步骤完成）
+          claude_args: |
+            --max-turns 150
+            --model claude-sonnet-4-6
+            --allowedTools Bash,Edit,Write,Read,Glob,Grep
+        # REFINE_RPC_URL / ROUNDS / FORK_BLOCK / TARGET_CHAIN 已在 job env，
+        # Claude 的 Bash 子进程可直接使用
+
+      # ── 安全扫描 ──────────────────────────────────────────────────────────
+      - name: 轻量机密泄露扫描（防 R0 被绕过）
+        run: |
+          BASE="${{ steps.vars.outputs.base }}"
+          git fetch origin "$BASE"
+          if git diff "origin/$BASE"...HEAD \
+               | grep -nEi \
+                 '(-----BEGIN [A-Z ]*PRIVATE KEY-----|0x[a-fA-F0-9]{64}|mnemonic|seed[[:space:]]phrase)'; then
+            echo "::error::diff 中检出疑似私钥/助记词 — 阻断推送"
+            exit 1
+          fi
+          echo "机密扫描通过"
+
+      # ── 推送与开 PR ───────────────────────────────────────────────────────
+      - name: 统计新提交数
+        id: count
+        run: |
+          BASE="${{ steps.vars.outputs.base }}"
+          AHEAD=$(git rev-list --count "origin/$BASE..HEAD")
+          echo "ahead=$AHEAD" >> "$GITHUB_OUTPUT"
+          echo "领先 $BASE 分支 $AHEAD 个提交"
+
+      - name: 推送工作分支
+        if: steps.count.outputs.ahead != '0'
+        run: |
+          B="${{ steps.vars.outputs.branch }}"
+          git push -u origin "$B"
+
+      - name: 开 PR（若尚未存在）
+        if: steps.count.outputs.ahead != '0'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          B="${{ steps.vars.outputs.branch }}"
+          BASE="${{ steps.vars.outputs.base }}"
+          DATE="${{ steps.vars.outputs.date }}"
+          if gh pr view "$B" --repo "${{ github.repository }}" >/dev/null 2>&1; then
+            echo "PR 已存在，分支已更新"
+          else
+            gh pr create \
+              --repo "${{ github.repository }}" \
+              --base "$BASE" \
+              --head "$B" \
+              --title "refine-dapp 每日自迭代 $DATE" \
+              --body "$(cat <<'PRBODY'
+自动生成，**合并前须人工 review**。
+
+## 改动说明
+
+见本次 CI 运行的 Artifact 及 `.refine-dapp/report-$DATE.md`。
+
+## 高风险改动（需重点审查）
+
+涉及 ABI / 存储布局 / 验签逻辑 / 费用计算的提交已在日报中标注 `[needs-human-review]`，请逐一检查。
+
+## 测试
+
+- [ ] `forge test` 在 fork 模式下全量通过
+- [ ] 不变量测试（`MarketCollateralSolvencyInvariantSpec`）通过
+- [ ] Slither 无新增 High / Medium 告警
+PRBODY
+)" \
+              --label "automated,refine-dapp" \
+              --draft
+          fi
+
+      # ── Artifact ──────────────────────────────────────────────────────────
+      - name: 上传日报与状态文件
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: refine-dapp-report-${{ steps.vars.outputs.date }}
+          path: |
+            .refine-dapp/report-*.md
+            .refine-dapp/daily-*.json
+          if-no-files-found: warn
+          retention-days: 30
