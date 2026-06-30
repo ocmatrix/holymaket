@@ -1,6 +1,6 @@
 ---
 name: refine-xmarket
-description: XMarket（Solidity 托管/撮合/结算合约 + Node·TS 后端）C2C 市场每日轮巡式自迭代，经 /refine-xmarket 触发。当用户要求每日/定期迭代 XMarket 代码、对标合约规范与 API 契约与安全审计做校验、做资金托管安全与越权防护与撮合一致性与性能优化并自动提交时使用。逐轮：发现更优解→实施→反向审计→分层自动化测试(unit+越权负样本+撮合不变量/fuzz+只读 fork+链上链下对账+负载基准)→闭环提交推送。绝不广播真实交易、绝不动用真实资金、绝不弱化鉴权/授权、绝不泄露密钥/PII。
+description: XMarket（Solidity 托管/撮合/结算合约 + Node·TS 后端）C2C 市场区域轮巡式自迭代，经 /refine-xmarket 触发，默认每 3 小时自动一轮、每轮只聚焦架构蓝图(REGIONS.md)中的一个代码区域、轮巡一圈后循环。当用户要求每日/定期/定时迭代 XMarket 代码、对标合约规范与 API 契约与安全审计做校验、做资金托管安全与越权防护与撮合一致性与性能优化并自动提交时使用。每轮闭环：选区→扫描审计→发现问题→规划修复→执行修复→分层测试→反向审计→验收提交推送；下一轮换下一个区域。绝不广播真实交易、绝不动用真实资金、绝不弱化鉴权/授权、绝不泄露密钥/PII。
 ---
 
 # refine-xmarket · XMarket 市场轮巡式自迭代（/refine-xmarket）
@@ -39,14 +39,28 @@ description: XMarket（Solidity 托管/撮合/结算合约 + Node·TS 后端）C
 - ❌ 单轮：Solidity 合约 ≤ 2，Node·TS 文件 ≤ 8，涉及模块 ≤ 2，不跨无关模块。
 - ❌ 禁止为过门禁而删/改测试、改预期、标 skip、放宽 slither/semgrep/eslint 配置、降低 fuzz 轮数。
 
-## 3. 每日状态与轮巡机制（Daily State）
-- 每日 P0 在 .refine-xmarket/daily-<UTC日期>.json 建/读：pinnedForkBlock、pinnedSeed、loadProfile(rps/conns/dataScale)、roundsDone、roundsCap(默认5)、dimsTouched、cumGains、rejected[]、lastCommit、lastGasSnapshotHash。
-- pinnedForkBlock + pinnedSeed + loadProfile 当日仅钉一次，全天所有 fork/撮合 fuzz/负载测试复用，保证可复现可比。
-- 幂等续跑；每轮间隔 ≥10 分钟。
+## 3. 区域轮巡机制（Region Rotation）—— 本 Skill 的核心节律
+- 节律：默认**每 3 小时自动一轮**（cron `0 */3 * * *`，UTC 00/03/06/09/12/15/18/21 触发）；交互式手动触发亦遵循同一选区规则。
+- 一轮一区：**每轮只聚焦一个代码区域**，区域取自架构蓝图 `.claude/skills/refine-xmarket/REGIONS.md`（权威）。
+- 选区算法（确定性、免持久化游标，可在每轮全新会话中复算）：
+  · `blockIndex = floor(UTC_epoch_seconds / 10800)`（10800=3h）；`regionIndex = blockIndex mod N`（N=REGIONS 表条目数）。
+  · 取 `order == regionIndex` 的区域为本轮唯一聚焦区；逐区前进、每日巡满一圈后从头循环。
+  · 落地：`date -u +%s` → `/10800` 取整 → `mod N` → 查 REGIONS 表。
+- 区外只读不改：本轮 FileScope 严格限定在所选区域的 glob 内；跨区/跨层契约改动一律归"上报项"（§10），不在本轮自动改。
+- 区域级跳过：若所选区当轮无可证收益（连续命中同区 2 次仍无），记 `skippedRegions[]` 并照常前进到下一区，不空转。
 
-## 4. 单轮工作流（每轮严格 P0→P6）
-P0 每日预检（每日首轮）：只读 RPC ping；启动本地 anvil fork @ pinnedForkBlock；只读 call 校验已部署合约版本与代码库 ABI 一致；DB 测试库就绪、迁移可前向应用并回滚演练通过；钉 pinnedSeed+loadProfile；写状态。任一失败→全轮停并上报。
-P1 对标校验：比对 contracts/backend 与合约规范/API 契约/authZ 模型/审计 baseline，输出清单（文件:行号、证据、严重级）：资金隐患(重入/结算非原子/精度舍入/超额释放/对账缺口) + 越权与数据(IDOR/BOLA、缺鉴权、注入、重放、限流缺失、PII 泄露) + 撮合不一致(非幂等、事务破坏、不变量违背、并发竞态) + 性能(N+1、阻塞事件循环、缺索引/缓存)。规范为权威；需改契约则归"上报项"。
+## 3'. 每日复现基线与状态（Daily State）
+- 每日 P0 在 .refine-xmarket/daily-<UTC日期>.json 建/读：pinnedForkBlock、pinnedSeed、loadProfile(rps/conns/dataScale)、roundsDone、roundsCap(默认8=每日巡满一圈)、regionsDone[]、currentRegion、dimsTouched、cumGains、rejected[]、skippedRegions[]、lastCommit、lastGasSnapshotHash。
+- pinnedForkBlock + pinnedSeed + loadProfile 当日仅钉一次，全天所有 fork/撮合 fuzz/负载测试复用，保证可复现可比。
+- 幂等续跑（同一 3h 区块内重复触发选同区、复用基线，不重复提交）；轮间隔由 cron 保证 ≥3h（≥10 分钟下限自然满足）。
+
+## 4. 单轮工作流（每轮严格 P0→P6；对应用户闭环：选区→扫描审计→发现问题→规划修复→执行修复→分层测试→反向审计→验收提交）
+P0 选区与预检：
+  (a) 选区：按 §3 选区算法计算 regionIndex，从 REGIONS.md 取本轮唯一聚焦区与其 FileScope/门禁画像/已知锚点；写 currentRegion。
+  (b) 工具链自举（缺则装，按 CI 锁定版，不跳门禁、不弱化）：探测 forge/anvil/cast/slither/semgrep/node 与所选区相关者；缺合约工具→`foundryup --install <CI版本>`（本仓为 1.7.1）；缺 slither→`pip install slither-analyzer`；缺 semgrep→`pip install semgrep`；联网失败或无法装→停并上报，不以臆测替代。
+  (c) 每日基线（每日首轮）：只读 RPC ping；启动本地 anvil fork @ pinnedForkBlock；只读 call 校验已部署合约版本与代码库 ABI 一致；DB 测试库就绪、迁移可前向应用并回滚演练通过；钉 pinnedSeed+loadProfile；写状态。
+  · 合约类区缺只读 RPC 仅影响 fork 门禁→可降级为 build+unit+invariant/fuzz+slither+snapshot 并在报告标注「fork 跳过(无RPC)」；其余任一失败→全轮停并上报。
+P1 对标校验（仅限本轮区域 FileScope）：在所选区域的 glob 内比对代码与合约规范/API 契约/authZ 模型/审计 baseline，输出清单（文件:行号、证据、严重级）：资金隐患(重入/结算非原子/精度舍入/超额释放/对账缺口) + 越权与数据(IDOR/BOLA、缺鉴权、注入、重放、限流缺失、PII 泄露) + 撮合不一致(非幂等、事务破坏、不变量违背、并发竞态) + 性能(N+1、阻塞事件循环、缺索引/缓存)。规范为权威；需改契约则归"上报项"。
 P2 审计与更优写法：按四维（资金优先）对每个候选点给"同语义更优实现"（CEI/重入卫士、SafeERC20、结算幂等键、固定点精度、参数化授权检查、owner 校验、限流中间件、nonce 防重放、撮合幂等与乐观锁、批量/缓存消除 N+1、连接池），标收益维度/风险；本轮择优选 1 个收益最高且可证伪目标（同等收益时优先资金/越权类）。
 P3 实施：工作分支最小原子改动；保持 ABI/结算数学/API 契约/authZ 模型/撮合不变量等价；同步补 unit + 越权负样本 + 撮合不变量/fuzz + fork + 对账测试。
 P4 反向审计（安全官视角）：等价性是否成立？是否引入重入/结算非原子/超额释放？越权负样本是否仍被拒？撮合不变量(资金守恒/无重复成交/幂等)是否保持？链上↔链下对账是否平？日志是否漏 secret/PII？触禁止清单吗？发现问题立即修正或回退。
@@ -82,9 +96,15 @@ CI 平价：命令须与仓库 CI 一致；CI 有而本地缺的检查→停下�
 - 钱包/链：不广播真实交易、不部署、不动资金、不读私钥；fork 只读。
 - 禁止为过门禁而弱化：不删/改测试、不放宽 slither/semgrep/eslint、不跳过越权与对账测试。
 
-## 9. 停止条件
-任一即停并汇总：① 达 roundsCap/用户轮数；② 连续 2 轮无可证收益；③ 触发需上报的 ABI/结算/API/authZ/schema/存储/依赖 决策；④ fork/越权/不变量/对账出现无法轮内修复阻塞；⑤ RPC 不可达、链上版本与代码库不同步、或迁移回滚失败。停止时保证工作区干净、末次提交门禁全绿、对账平衡、状态与日报落盘。
+## 9. 停止条件（单轮级）
+任一即停并汇总（仅结束**本轮**，不影响下一个 3h 触发）：① 达 roundsCap(默认8，每日巡满一圈)/用户指定轮数；② 本区连续 2 轮无可证收益→记 skippedRegions[] 并让位下一区；③ 触发需上报的 ABI/结算/API/authZ/schema/存储/依赖 决策；④ fork/越权/不变量/对账出现无法轮内修复阻塞；⑤ RPC 不可达、链上版本与代码库不同步、或迁移回滚失败、或工具链联网安装失败。停止时保证工作区干净、末次提交门禁全绿、对账平衡、状态与日报落盘。
 
 ## 10. 多模块与上报项
-- contracts / backend 单轮聚焦其一；跨层契约（ABI、事件→账本映射、API）改动归上报项。
+- 单轮聚焦 REGIONS.md 中**一个**区域；跨区/跨层契约（ABI、事件→账本映射、API、authZ 模型、DB schema）改动归上报项，开 PR 等人工 review。
 - 多链部署时本轮指定 fork 链；默认主链最新已部署版本，P0 必须核对链上↔代码库一致。
+
+## 11. 自动轮巡触发器（Automation）
+- 默认节律由外部调度器每 3 小时触发一次 `/refine-xmarket`（cron `0 */3 * * *`，UTC）；每次触发即一轮，按 §3 选区算法自动落到当下 3h 区块对应的区域，逐区前进、每日巡满一圈后循环。
+- 触发器与本 Skill 解耦：Skill 不自管调度，仅在被触发时按时钟选区执行单轮闭环。调度可由 claude-code-remote 的 create_trigger（cron）、或仓库 GitHub Action（schedule）承载。
+- 调度器变更/暂停/停用属运维操作，不在 Skill 自治范围；Skill 永不自行新建/删除调度。
+- 自动轮巡下：纯性能/可读/稳定改进 → 自动提交并 push 工作分支；触上报项 → 仅开 PR 候人工 review，绝不自动合受保护分支（§7/§8 不变）。
