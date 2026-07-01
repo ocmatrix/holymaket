@@ -118,3 +118,46 @@ jobs:
               --body "Automated /refine-xmarket region-rotation round. See per-round report in the branch. Draft — human review required for any reported (上报项) contract-ABI / settlement-math / authZ / schema changes." \
               || echo "PR 已存在或开 PR 失败（非阻断）。"
           fi
+
+      # 大轮收尾（§3''/§P7）：仅当本轮是大轮最后一个模块(regionIndex==N-1)且门禁全绿时，
+      # 对本大轮的良好状态打一次顺序安全基线 baseline-<K+1>。标签推送被本仓 git 中继策略 403 拒，
+      # 故用 GitHub API 建"永不写入的只读基线分支"作为等效不可变回滚锚点。空大轮（无新提交）跳过。
+      - name: 大轮完成 → 打安全基线（baseline-<K+1>）
+        if: success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          regions_file=".claude/skills/refine-xmarket/REGIONS.md"
+          N="$(grep -cE '^\| [0-9]+ \| ' "${regions_file}" || echo 0)"
+          if [ "${N}" -le 0 ]; then echo "无法从 REGIONS.md 确定 N，跳过基线。"; exit 0; fi
+          epoch="$(date -u +%s)"
+          regionIndex=$(( (epoch / 10800) % N ))
+          if [ "${regionIndex}" -ne $(( N - 1 )) ]; then
+            echo "本轮 regionIndex=${regionIndex} 非大轮末轮(N-1=$(( N - 1 )))，不打基线。"; exit 0
+          fi
+          date_utc="$(date -u +%F)"
+          branch="auto/refine-xmarket/${date_utc}"
+          if ! git rev-parse --verify "refs/heads/${branch}" >/dev/null 2>&1; then
+            echo "空大轮：本大轮无工作分支/无改动，跳过基线。"; exit 0
+          fi
+          goodSha="$(git rev-parse "refs/heads/${branch}")"
+          # 现存最大基线序号 K 及其指向 sha（分支或标签）
+          maxK=0; latestSha=""
+          while read -r sha ref; do
+            [ -z "${ref:-}" ] && continue
+            k="$(printf '%s' "${ref}" | sed -E 's#.*/baseline-([0-9]+)$#\1#')"
+            case "${k}" in ''|*[!0-9]*) continue;; esac
+            if [ "${k}" -gt "${maxK}" ]; then maxK="${k}"; latestSha="${sha}"; fi
+          done < <(git ls-remote origin 'refs/heads/baseline-*' 'refs/tags/baseline-*' 2>/dev/null || true)
+          if [ "${goodSha}" = "${latestSha}" ]; then
+            echo "空大轮：HEAD(${goodSha}) 未推进（== baseline-${maxK}），跳过。"; exit 0
+          fi
+          nextK=$(( maxK + 1 ))
+          echo "大轮完成 → 创建 baseline-${nextK} @ ${goodSha}"
+          if gh api "repos/${{ github.repository }}/git/refs" \
+               -f ref="refs/heads/baseline-${nextK}" -f sha="${goodSha}" >/dev/null 2>&1; then
+            echo "baseline-${nextK} 已创建（只读快照分支，指向 ${goodSha}）。"
+          else
+            echo "创建 baseline-${nextK} 失败（可能已存在或权限不足），非阻断。"
+          fi

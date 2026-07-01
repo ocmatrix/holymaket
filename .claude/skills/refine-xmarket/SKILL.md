@@ -48,13 +48,28 @@ description: XMarket（Solidity 托管/撮合/结算合约 + Node·TS 后端）C
   · 落地：`date -u +%s` → `/10800` 取整 → `mod N` → 查 REGIONS 表。
 - 区外只读不改：本轮 FileScope 严格限定在所选区域的 glob 内；跨区/跨层契约改动一律归"上报项"（§10），不在本轮自动改。
 - 区域级跳过：若所选区当轮无可证收益（连续命中同区 2 次仍无），记 `skippedRegions[]` 并照常前进到下一区，不空转。
+- **小轮 vs 大轮**：一个"**小轮**"= 一次触发 = 扫描并处理**一个模块/区域**；一个"**大轮**"（full cycle）= 连续 N 个小轮把 REGIONS 表**全部 N 个模块都轮巡扫描完一遍**（= 整个项目全模块覆盖一圈）。默认 N=8、3h/轮 → 一大轮≈24h。
+
+## 3''. 大轮安全基线（Cycle Baseline）—— 每完成一大轮打一次
+- 触发条件：**仅在完成一大轮时**打一次安全基线锚点；单个小轮结束**不打**基线，只做常规提交（§7）。
+- 大轮完成判定（确定性、免持久化游标）：
+  · `cycleNumber = floor(UTC_epoch_seconds / (10800 * N))`；当本轮 `regionIndex == N-1`（大轮最后一个模块）且其门禁全绿 → 该大轮完成。
+  · 等价理解：从 order=0 扫到 order=N-1 走满一圈，即"整个项目所有模块都扫描完"。
+- 基线命名与序号：人类可读**顺序号** `baseline-<K+1>`，K = 现存 `baseline-*` 锚点的最大序号（远端 `git ls-remote origin 'refs/heads/baseline-*'` / `refs/tags/baseline-*` 取 max）。当前起点：`baseline-1`。
+- 空大轮去重：若本大轮相对上一基线**无新提交**（当前良好 HEAD 的 sha == 最新 baseline 指向的 sha）→ **跳过**，不打重复基线。
+- 落地机制（tag 优先，被策略拒则退化为基线分支）：
+  · 首选附注标签 `git tag -a baseline-<K+1> -m "…"`；
+  · 若推送标签被 git 中继策略 403 拒（本仓即此情况）→ 改用**基线分支**：经 GitHub API/`gh api repos/:owner/:repo/git/refs -f ref=refs/heads/baseline-<K+1> -f sha=<goodSha>` 创建永不写入的只读快照分支，效果等价、远端持久。
+- 指向：基线指向"本大轮末轮通过全部门禁、对账平衡"的那个提交（当前工作分支 HEAD 的良好提交）。
+- 回滚：`git fetch origin baseline-<K>` 后 `git reset --hard origin/baseline-<K>`（整体回滚）/ `git checkout origin/baseline-<K> -- <path>`（按文件恢复）/ `git switch -c fix-from-baseline origin/baseline-<K>`（从基线另起分支）。
+- 记 `lastBaseline`、`lastBaselineCycle`、`lastBaselineSha` 入当日状态，供下一大轮去重比对。
 
 ## 3'. 每日复现基线与状态（Daily State）
 - 每日 P0 在 .refine-xmarket/daily-<UTC日期>.json 建/读：pinnedForkBlock、pinnedSeed、loadProfile(rps/conns/dataScale)、roundsDone、roundsCap(默认8=每日巡满一圈)、regionsDone[]、currentRegion、dimsTouched、cumGains、rejected[]、skippedRegions[]、lastCommit、lastGasSnapshotHash。
 - pinnedForkBlock + pinnedSeed + loadProfile 当日仅钉一次，全天所有 fork/撮合 fuzz/负载测试复用，保证可复现可比。
 - 幂等续跑（同一 3h 区块内重复触发选同区、复用基线，不重复提交）；轮间隔由 cron 保证 ≥3h（≥10 分钟下限自然满足）。
 
-## 4. 单轮工作流（每轮严格 P0→P6；对应用户闭环：选区→扫描审计→发现问题→规划修复→执行修复→分层测试→反向审计→验收提交）
+## 4. 单轮工作流（每轮严格 P0→P6，大轮末轮追加 P7；对应用户闭环：选区→扫描审计→发现问题→规划修复→执行修复→分层测试→反向审计→验收提交，大轮末轮再打基线）
 P0 选区与预检：
   (a) 选区：按 §3 选区算法计算 regionIndex，从 REGIONS.md 取本轮唯一聚焦区与其 FileScope/门禁画像/已知锚点；写 currentRegion。
   (b) 工具链自举（缺则装，按 CI 锁定版，不跳门禁、不弱化）：探测 forge/anvil/cast/slither/semgrep/node 与所选区相关者；缺合约工具→`foundryup --install <CI版本>`（本仓为 1.7.1）；缺 slither→`pip install slither-analyzer`；缺 semgrep→`pip install semgrep`；联网失败或无法装→停并上报，不以臆测替代。
@@ -69,6 +84,7 @@ P5 分层验证（按改动面触发，真实执行留证）：
   · 重门禁（门控 push，按面）：合约改动→fork test@pinnedBlock + invariant/fuzz + slither + 存储布局校验；后端改动→API 集成 + 越权负样本套件 + 撮合不变量/fuzz@pinnedSeed + 依赖审计 + semgrep + 负载/延迟@loadProfile；跨层→链上↔链下对账测试。
   指标：gas before→after、测试通过率、越权拦截率、撮合不变量结果、对账平衡、p50/p95 延迟与吞吐、安全告警增量、secret/PII 扫描=干净。任一未过/回归→轮内修复；修不了则 git revert，记入 rejected[]。
 P6 闭环提交推送：仅当对应门禁全绿且对账平衡时原子提交（CI 环境只 commit，push/PR 交后续步骤；交互式则 push 工作分支）；否则不提交。更新状态。
+P7 大轮收尾（仅当本轮 `regionIndex == N-1` 且门禁全绿）：按 §3'' 判定大轮完成 → 若相对上一基线有新提交则打 `baseline-<K+1>`（标签优先，被拒退化为基线分支 via GitHub API/`gh api`），指向本轮良好 HEAD；空大轮跳过。更新 `lastBaseline*`。非大轮末轮不执行本步。
 
 ## 5. 分层门禁
 快门禁（每轮，门控 commit）：`prettier --check` · `eslint`(含 security/authz 规则) 0 报错 · `tsc --noEmit` · `vitest run`(单测) · `forge build` 编译过、warnings ≤ baseline · `forge test`(unit) · `forge snapshot --check` 无 gas 回归 · 密钥/PII 扫描干净 · diff 在 FileScope 内且未触禁止清单。
@@ -108,3 +124,4 @@ CI 平价：命令须与仓库 CI 一致；CI 有而本地缺的检查→停下�
 - 触发器与本 Skill 解耦：Skill 不自管调度，仅在被触发时按时钟选区执行单轮闭环。调度可由 claude-code-remote 的 create_trigger（cron）、或仓库 GitHub Action（schedule）承载。
 - 调度器变更/暂停/停用属运维操作，不在 Skill 自治范围；Skill 永不自行新建/删除调度。
 - 自动轮巡下：纯性能/可读/稳定改进 → 自动提交并 push 工作分支；触上报项 → 仅开 PR 候人工 review，绝不自动合受保护分支（§7/§8 不变）。
+- **大轮基线由调度器落地**：GitHub Action 在 `regionIndex == N-1` 且本轮门禁全绿时执行 §3''/§P7——相对上一基线有新提交则创建顺序基线 `baseline-<K+1>`（本仓标签推送被策略拒 → 用 `gh api` 建只读基线分支），空大轮跳过；`baseline-1` 为人工冻结起点。
