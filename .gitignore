@@ -70,5 +70,5 @@ contracts/typechain-types/
 Thumbs.db
 .DS_Store
 
-# refine-xmarket skill daily state
-.refine-xmarket/
+# auto-evo skill daily state
+.auto-evo/

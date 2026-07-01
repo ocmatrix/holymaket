@@ -1,9 +1,9 @@
 ---
-name: refine-xmarket
-description: XMarket（Solidity 托管/撮合/结算合约 + Node·TS 后端）C2C 市场区域轮巡式自迭代，经 /refine-xmarket 触发，默认每 3 小时自动一轮、每轮只聚焦架构蓝图(REGIONS.md)中的一个代码区域、轮巡一圈后循环。当用户要求每日/定期/定时迭代 XMarket 代码、对标合约规范与 API 契约与安全审计做校验、做资金托管安全与越权防护与撮合一致性与性能优化并自动提交时使用。每轮闭环：选区→扫描审计→发现问题→规划修复→执行修复→分层测试→反向审计→验收提交推送；下一轮换下一个区域。绝不广播真实交易、绝不动用真实资金、绝不弱化鉴权/授权、绝不泄露密钥/PII。
+name: auto-evo
+description: XMarket（Solidity 托管/撮合/结算合约 + Node·TS 后端）C2C 市场区域轮巡式自迭代，经 /auto-evo 触发，默认每 3 小时自动一轮、每轮只聚焦架构蓝图(REGIONS.md)中的一个代码区域、轮巡一圈后循环。当用户要求每日/定期/定时迭代 XMarket 代码、对标合约规范与 API 契约与安全审计做校验、做资金托管安全与越权防护与撮合一致性与性能优化并自动提交时使用。每轮闭环：选区→扫描审计→发现问题→规划修复→执行修复→分层测试→反向审计→验收提交推送；下一轮换下一个区域。绝不广播真实交易、绝不动用真实资金、绝不弱化鉴权/授权、绝不泄露密钥/PII。
 ---
 
-# refine-xmarket · XMarket 市场轮巡式自迭代（/refine-xmarket）
+# auto-evo · XMarket 市场轮巡式自迭代（/auto-evo）
 
 ## 0. 角色与总则（Cardinal Rules）
 - R0 资金红线（最高优先）：绝不向任何实网/测试网广播交易、绝不部署、绝不动用真实资金、绝不读取/解密私钥与助记词；链交互仅限本地 anvil 与只读 RPC 上的 fork 模拟。
@@ -19,7 +19,7 @@ description: XMarket（Solidity 托管/撮合/结算合约 + Node·TS 后端）C
 - 边界先行：先确认边界与禁止清单再动手；任何不确定即停下标注。
 
 ## 1. 触发与输入契约（Inputs）
-经 /refine-xmarket 启动后定位并读取"事实基线"（缺失则索取，不得脑补）：
+经 /auto-evo 启动后定位并读取"事实基线"（缺失则索取，不得脑补）：
 - PR 描述/任务卡（目标、验收标准、聚焦层 contracts/backend、链与 fork 区块）
 - 合约规范 / Gas 预算 / 安全审计 baseline（Slither/审计报告/已知 issue）、托管与结算状态机定义
 - API 契约（OpenAPI/路由清单）、authZ 模型（角色/资源/owner 关系）、DB schema 与迁移、限流与签名/nonce 政策
@@ -28,7 +28,7 @@ description: XMarket（Solidity 托管/撮合/结算合约 + Node·TS 后端）C
 
 ## 2. 硬边界与禁止清单（Boundaries / Non-goals）
 - ❌ 违反 R0/R0'：广播交易、部署、动资金、读私钥、弱化鉴权/授权、泄露 secret/PII——绝对禁止。
-- ❌ 不在 main/master/release 直接改动或提交；只在 `auto/refine-xmarket/<UTC日期>` 工作分支作业。
+- ❌ 不在 main/master/release 直接改动或提交；只在 `auto-evo/<UTC日期>` 工作分支作业。
 - ❌ 不 force-push、不改写已共享历史、不删他人提交。
 - ❌ 不读取/打印/提交任何密钥、助记词、.env、真实用户数据；diff 与日志须经密钥/PII 扫描。
 - ❌ 不改本 Skill 自身、.git/、.github/、CI 配置——除非显式授权。
@@ -41,7 +41,7 @@ description: XMarket（Solidity 托管/撮合/结算合约 + Node·TS 后端）C
 
 ## 3. 区域轮巡机制（Region Rotation）—— 本 Skill 的核心节律
 - 节律：默认**每 3 小时自动一轮**（cron `0 */3 * * *`，UTC 00/03/06/09/12/15/18/21 触发）；交互式手动触发亦遵循同一选区规则。
-- 一轮一区：**每轮只聚焦一个代码区域**，区域取自架构蓝图 `.claude/skills/refine-xmarket/REGIONS.md`（权威）。
+- 一轮一区：**每轮只聚焦一个代码区域**，区域取自架构蓝图 `.claude/skills/auto-evo/REGIONS.md`（权威）。
 - 选区算法（确定性、免持久化游标，可在每轮全新会话中复算）：
   · `blockIndex = floor(UTC_epoch_seconds / 10800)`（10800=3h）；`regionIndex = blockIndex mod N`（N=REGIONS 表条目数）。
   · 取 `order == regionIndex` 的区域为本轮唯一聚焦区；逐区前进、每日巡满一圈后从头循环。
@@ -65,7 +65,7 @@ description: XMarket（Solidity 托管/撮合/结算合约 + Node·TS 后端）C
 - 记 `lastBaseline`、`lastBaselineCycle`、`lastBaselineSha` 入当日状态，供下一大轮去重比对。
 
 ## 3'. 每日复现基线与状态（Daily State）
-- 每日 P0 在 .refine-xmarket/daily-<UTC日期>.json 建/读：pinnedForkBlock、pinnedSeed、loadProfile(rps/conns/dataScale)、roundsDone、roundsCap(默认8=每日巡满一圈)、regionsDone[]、currentRegion、dimsTouched、cumGains、rejected[]、skippedRegions[]、lastCommit、lastGasSnapshotHash。
+- 每日 P0 在 .auto-evo/daily-<UTC日期>.json 建/读：pinnedForkBlock、pinnedSeed、loadProfile(rps/conns/dataScale)、roundsDone、roundsCap(默认8=每日巡满一圈)、regionsDone[]、currentRegion、dimsTouched、cumGains、rejected[]、skippedRegions[]、lastCommit、lastGasSnapshotHash。
 - pinnedForkBlock + pinnedSeed + loadProfile 当日仅钉一次，全天所有 fork/撮合 fuzz/负载测试复用，保证可复现可比。
 - 幂等续跑（同一 3h 区块内重复触发选同区、复用基线，不重复提交）；轮间隔由 cron 保证 ≥3h（≥10 分钟下限自然满足）。
 
@@ -99,7 +99,7 @@ CI 平价：命令须与仓库 CI 一致；CI 有而本地缺的检查→停下�
 缺工具不得跳门禁：用等价工具或停下上报。
 
 ## 7. Git 闭环与报告
-- 分支 `auto/refine-xmarket/<UTC日期>`，起始工作区干净。
+- 分支 `auto-evo/<UTC日期>`，起始工作区干净。
 - 一轮一原子提交；信息 `refine(xmarket/<scope>): <更优写法/资金安全/越权修复/撮合一致> [round N]`，正文含动机、四维收益、等价性与资金/数据安全论证、fork+对账结果、gas before→after、负载 p50/p95、门禁摘要。
 - push/PR：纯性能/可读/稳定改进自动到工作分支；涉及 合约 ABI、结算数学、托管状态机、API 契约、authZ 模型、DB schema、存储布局 变更→开 PR 等人工 review，绝不自动合受保护分支。
 - 每轮报告 + 当日日报落到工作分支。
@@ -120,7 +120,7 @@ CI 平价：命令须与仓库 CI 一致；CI 有而本地缺的检查→停下�
 - 多链部署时本轮指定 fork 链；默认主链最新已部署版本，P0 必须核对链上↔代码库一致。
 
 ## 11. 自动轮巡触发器（Automation）
-- 默认节律由外部调度器每 3 小时触发一次 `/refine-xmarket`（cron `0 */3 * * *`，UTC）；每次触发即一轮，按 §3 选区算法自动落到当下 3h 区块对应的区域，逐区前进、每日巡满一圈后循环。
+- 默认节律由外部调度器每 3 小时触发一次 `/auto-evo`（cron `0 */3 * * *`，UTC）；每次触发即一轮，按 §3 选区算法自动落到当下 3h 区块对应的区域，逐区前进、每日巡满一圈后循环。
 - 触发器与本 Skill 解耦：Skill 不自管调度，仅在被触发时按时钟选区执行单轮闭环。调度可由 claude-code-remote 的 create_trigger（cron）、或仓库 GitHub Action（schedule）承载。
 - 调度器变更/暂停/停用属运维操作，不在 Skill 自治范围；Skill 永不自行新建/删除调度。
 - 自动轮巡下：纯性能/可读/稳定改进 → 自动提交并 push 工作分支；触上报项 → 仅开 PR 候人工 review，绝不自动合受保护分支（§7/§8 不变）。
