@@ -26,6 +26,12 @@ description: XMarket（Solidity 托管/撮合/结算合约 + Node·TS 后端）C
 - 链上↔链下对账口径（事件→账本映射、资金守恒等式）、只读 RPC、已部署合约地址/ABI/版本
 随后探测：Node·TS 工程(包管理/构建/测试/lint)、Foundry/Hardhat、unit/集成/越权/不变量/fork/负载入口、CI 命令集、当前分支与工作区是否干净、合约链上版本与代码库 ABI 是否一致、迁移是否前向可回滚。
 
+## 1.1 关键文件契约（记忆与计划的单一真相源）
+- 架构蓝图（只读权威）：docs/ARCHITECTURE.md（可 config 覆盖）。定义模块边界、依赖方向与领域不变量。本 skill 只对标、不改。
+- PR 规划手册（活文档·计划与状态单一真相源）：docs/PR-PLAYBOOK.md。含 模块清单、每模块 PR 路线图（待办/进行/已完成）、每条 PR 目标与验收标准、关键决策与"上报项"、巡次(sweep)与轮换记录。每轮读、每轮回写。
+- 工作记忆：.auto-evo/worklog.md（累积）+ .auto-evo/round-<N>.md（每轮报告）+ 现有 daily-<date>.json（运行态：seed/forkBlock/loadProfile/cursor/roundsDone/lastRoundEndUTC）。
+- 职责边界：daily-json 只管运行态计数；PR 手册才是工作记忆与计划的权威，两者不混。
+
 ## 2. 硬边界与禁止清单（Boundaries / Non-goals）
 - ❌ 违反 R0/R0'：广播交易、部署、动资金、读私钥、弱化鉴权/授权、泄露 secret/PII——绝对禁止。
 - ❌ 不在 main/master/release 直接改动或提交；只在 `auto-evo/<UTC日期>` 工作分支作业。
@@ -68,8 +74,21 @@ description: XMarket（Solidity 托管/撮合/结算合约 + Node·TS 后端）C
 - 每日 P0 在 .auto-evo/daily-<UTC日期>.json 建/读：pinnedForkBlock、pinnedSeed、loadProfile(rps/conns/dataScale)、roundsDone、roundsCap(默认8=每日巡满一圈)、regionsDone[]、currentRegion、dimsTouched、cumGains、rejected[]、skippedRegions[]、lastCommit、lastGasSnapshotHash。
 - pinnedForkBlock + pinnedSeed + loadProfile 当日仅钉一次，全天所有 fork/撮合 fuzz/负载测试复用，保证可复现可比。
 - 幂等续跑（同一 3h 区块内重复触发选同区、复用基线，不重复提交）；轮间隔由 cron 保证 ≥3h（≥10 分钟下限自然满足）。
+- 职责界定（见 §1.1）：本 daily-json **只管运行态计数**（seed/forkBlock/loadProfile/cursor/roundsDone/lastRoundEndUTC 等）；**工作记忆与计划的权威是 PR 手册 docs/PR-PLAYBOOK.md**，两者不混。
+
+## 3.9 首次冷启动（Bootstrap，仅一次）
+若 PR-PLAYBOOK.md 或 config 不存在：
+1) 扫描架构蓝图与仓库，产出模块清单（路径、依赖、风险面）。
+2) 按本 skill 的盯死优先级 资金/托管安全 > API/越权与数据安全 > 撮合/结算一致性 > 并发/吞吐/延迟（§0 四维目标原文，不新增） 为每模块起草 PR 路线图，写入 PR 手册。
+3) 生成 config（modules、cursor=0、domainProfile=xmarket、mergePolicy 默认安全）。
+4) 原子提交手册与 config（chore(auto-evo): bootstrap plan & module inventory），停止并输出冷启动摘要，等下一轮正式开工。
+已存在则跳过，直接进入每轮流程。
 
 ## 4. 单轮工作流（每轮严格 P0→P6，大轮末轮追加 P7；对应用户闭环：选区→扫描审计→发现问题→规划修复→执行修复→分层测试→反向审计→验收提交，大轮末轮再打基线）
+T0 连续性回顾（每轮第一件事）：读 PR 手册 + 最近 worklog + 上轮报告 → 恢复"上轮做到哪、下一条 PR 是什么、有哪些未决上报项"，据此确定本轮模块与目标，再进入原有预检/门禁流程。
+T-末 同步回写（每轮最后一件事，门禁全绿后）：在 PR 手册标记本条 PR 状态、登记提交/PR 链接与残留风险、更新巡次与 cursor；写本轮报告与 worklog；更新 daily-json 的 cursor/lastRoundEndUTC。
+铁律：未完成 T-末 回写不算收官；下一轮 T0 必须能仅从 PR 手册恢复全部计划状态，不依赖重新读代码猜进度。
+
 P0 选区与预检：
   (a) 选区：按 §3 选区算法计算 regionIndex，从 REGIONS.md 取本轮唯一聚焦区与其 FileScope/门禁画像/已知锚点；写 currentRegion。
   (b) 工具链自举（缺则装，按 CI 锁定版，不跳门禁、不弱化）：探测 forge/anvil/cast/slither/semgrep/node 与所选区相关者；缺合约工具→`foundryup --install <CI版本>`（本仓为 1.7.1）；缺 slither→`pip install slither-analyzer`；缺 semgrep→`pip install semgrep`；联网失败或无法装→停并上报，不以臆测替代。
