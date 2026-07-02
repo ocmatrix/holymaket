@@ -68,7 +68,9 @@
 
 ### 7 · indexer-reconciliation
 - [ ] 待办 I1：链上↔链下对账断言（Σ链上托管余额 == 后端账本未结算额）测试化。
-- [ ] 待办 I2：reserve/trade/claim/position 投影幂等与事件重放最终一致测试。
+- [~] 进行 I2：投影幂等与事件重放最终一致测试。
+  - [x] position 投影：invariants + idempotency 覆盖（sell 越额拒绝/round-trip 守恒/claim·refund 幂等与终态）— round 1，commit 774e1df，13/13 green。
+  - [ ] 残留：reserve/trade/claim 投影的幂等与"带 DB 的事件重放最终一致"测试（需 Prisma client 生成；本环境引擎二进制下载被 egress 策略拦截 → 上报项 D2）。
 - ⚠ 上报项：事件→账本映射口径、`schema.prisma`。
 
 ## 4. 上报项（冻结面与跨层契约 · 不自动改，开 PR 候人工 review）
@@ -78,6 +80,8 @@
 ## 5. 关键决策（Decisions Log）
 - D0（bootstrap）：以 Phase 1 冻结基线为红线，auto-evo 只做冻结面之上的加固；后端目前无测试，故 server-* 各区首要 PR 是"补测试脚手架 + 越权负样本"，再谈优化。
 - D1：合约类区若无只读 RPC，fork 门禁降级为 build+unit+invariant/fuzz+slither+snapshot 并在报告标注。
+- D2（上报项/环境）：indexer 全量 `tsc --noEmit` 与带 DB 的投影测试在本环境无法通过——`@prisma/client` 生成需下载引擎二进制，被 egress 策略拦截（ECONNRESET）。故本区暂只做"纯 reducer"层测试（`node --test`，不依赖 Prisma runtime）。补齐带 DB 的对账测试需：可访问 Prisma 引擎的环境，或将 indexer typecheck/test 纳入仓库 CI。归上报项待人工决策。
 
 ## 6. 巡次历史（追加式）
 - 2026-07 Sweep 0：Bootstrap 完成，计划与 config 落盘，cursor=0，未改业务代码。
+- 2026-07-02 round 1（region 7 indexer-reconciliation）：I2 position 投影 invariants/idempotency 测试（+8，13/13 green，test-only），commit 774e1df。大轮未满（仅覆盖 region 7），P7 跳过基线。新增决策 D2。
