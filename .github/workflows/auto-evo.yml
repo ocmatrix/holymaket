@@ -72,7 +72,9 @@ jobs:
         run: |
           npm ci || npm install
           if [ -f server/package.json ]; then (cd server && npm ci || npm install) || true; fi
-          if [ -f indexer/package.json ]; then (cd indexer && npm ci || npm install) || true; fi
+          if [ -f indexer/package.json ]; then
+            (cd indexer && (npm ci || npm install --ignore-scripts) && npx prisma generate) || true
+          fi
 
       - name: Pre-build contracts（暖 cache + 锚 gas snapshot 基线）
         working-directory: contracts

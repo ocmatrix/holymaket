@@ -92,6 +92,7 @@ T-末 同步回写（每轮最后一件事，门禁全绿后）：在 PR 手册�
 P0 选区与预检：
   (a) 选区：按 §3 选区算法计算 regionIndex，从 REGIONS.md 取本轮唯一聚焦区与其 FileScope/门禁画像/已知锚点；写 currentRegion。
   (b) 工具链自举（缺则装，按 CI 锁定版，不跳门禁、不弱化）：探测 forge/anvil/cast/slither/semgrep/node 与所选区相关者；缺合约工具→`foundryup --install <CI版本>`（本仓为 1.7.1）；缺 slither→`pip install slither-analyzer`；缺 semgrep→`pip install semgrep`；联网失败或无法装→停并上报，不以臆测替代。
+    · indexer/prisma 相关区：以 `npm install --ignore-scripts` 装依赖 + `npx prisma generate` 生成 client（引擎经代理下载，勿依赖 npm postinstall——postinstall 不走代理会 ECONNRESET）；生成后 `tsc --noEmit` 方可全绿。带 DB 的对账测试另需测试 Postgres（`DATABASE_URL`），无则该子集降级为纯 reducer 层 `node --test` 并标注。
   (c) 每日基线（每日首轮）：只读 RPC ping；启动本地 anvil fork @ pinnedForkBlock；只读 call 校验已部署合约版本与代码库 ABI 一致；DB 测试库就绪、迁移可前向应用并回滚演练通过；钉 pinnedSeed+loadProfile；写状态。
   · 合约类区缺只读 RPC 仅影响 fork 门禁→可降级为 build+unit+invariant/fuzz+slither+snapshot 并在报告标注「fork 跳过(无RPC)」；其余任一失败→全轮停并上报。
 P1 对标校验（仅限本轮区域 FileScope）：在所选区域的 glob 内比对代码与合约规范/API 契约/authZ 模型/审计 baseline，输出清单（文件:行号、证据、严重级）：资金隐患(重入/结算非原子/精度舍入/超额释放/对账缺口) + 越权与数据(IDOR/BOLA、缺鉴权、注入、重放、限流缺失、PII 泄露) + 撮合不一致(非幂等、事务破坏、不变量违背、并发竞态) + 性能(N+1、阻塞事件循环、缺索引/缓存)。规范为权威；需改契约则归"上报项"。
