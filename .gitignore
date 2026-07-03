@@ -69,3 +69,6 @@ contracts/typechain-types/
 # OS
 Thumbs.db
 .DS_Store
+
+# auto-evo skill daily state
+.auto-evo/

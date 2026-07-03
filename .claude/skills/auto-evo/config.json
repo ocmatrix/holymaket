@@ -1,0 +1,46 @@
+{
+  "schema": "auto-evo/config@1",
+  "domainProfile": "xmarket",
+  "cursor": 0,
+  "roundHours": 3,
+  "regionCount": 8,
+  "architectureBlueprint": [
+    "docs/XMarket_Phase1_Architecture_Blueprint.md",
+    "docs/XMarket_Phase1_Boundary_And_Freeze_Spec.md",
+    ".claude/skills/auto-evo/REGIONS.md"
+  ],
+  "playbook": "docs/PR-PLAYBOOK.md",
+  "stateDir": ".auto-evo",
+  "priority": ["fund-custody", "api-authz", "matching-consistency", "concurrency-throughput"],
+  "mergePolicy": {
+    "autoPushWorkingBranch": true,
+    "autoMergeProtected": false,
+    "reportItemsRequirePR": true,
+    "protectedBranches": ["main", "master", "release"]
+  },
+  "baseline": {
+    "current": "baseline-1",
+    "mechanism": "branch",
+    "note": "tag push blocked by git relay policy (403); baselines created as read-only branches via GitHub API"
+  },
+  "modules": [
+    { "order": 0, "name": "contracts-settlement-escrow", "layer": "contracts", "scope": ["contracts/src/market/BinaryPredictionMarket.sol"], "dominantDims": ["fund"] },
+    { "order": 1, "name": "contracts-pricing-cpmm", "layer": "contracts", "scope": ["contracts/src/pricing/CPMMEngine.sol", "contracts/src/interfaces/ICPMMEngine.sol"], "dominantDims": ["fund", "consistency"] },
+    { "order": 2, "name": "contracts-factory-fees", "layer": "contracts", "scope": ["contracts/src/market/MarketFactory.sol", "contracts/src/fees/Treasury.sol", "contracts/src/fees/FeeRouter.sol", "contracts/src/fees/ITreasury.sol"], "dominantDims": ["fund"] },
+    { "order": 3, "name": "contracts-tokens", "layer": "contracts", "scope": ["contracts/src/tokens/OutcomeToken.sol", "contracts/src/tokens/MockUSDT.sol", "contracts/src/settlement/AdminOracleResolver.sol", "contracts/src/interfaces/*"], "dominantDims": ["fund", "consistency"] },
+    { "order": 4, "name": "server-auth", "layer": "backend", "scope": ["server/src/auth/**"], "dominantDims": ["api-authz"] },
+    { "order": 5, "name": "server-market-amm", "layer": "backend", "scope": ["server/src/market/**", "server/src/amm/**", "server/src/events/**"], "dominantDims": ["api-authz", "consistency"] },
+    { "order": 6, "name": "server-user-rewards", "layer": "backend", "scope": ["server/src/user/**", "server/src/referral/**", "server/src/quest/**", "server/src/season/**", "server/src/round/**", "server/src/strategy/**", "server/src/team/**"], "dominantDims": ["api-authz"] },
+    { "order": 7, "name": "indexer-reconciliation", "layer": "indexer", "scope": ["indexer/src/projections/**", "indexer/src/sync/**", "indexer/src/api/**"], "dominantDims": ["consistency", "fund"] }
+  ],
+  "frozenSurfaces": [
+    "CPMM sell quote math & input domains",
+    "explicit revert rules",
+    "k invariant (k_after >= k_before)",
+    "rounding error <= 5",
+    "Cancelled/Invalid refundWindow",
+    "Treasury sweep",
+    "Phase 1 test baseline"
+  ],
+  "bootstrap": { "sweep": 0, "completedUTCDate": "2026-07-02", "businessCodeChanged": false }
+}
