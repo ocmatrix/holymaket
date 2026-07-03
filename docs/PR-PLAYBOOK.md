@@ -69,8 +69,10 @@
 ### 7 · indexer-reconciliation
 - [ ] 待办 I1：链上↔链下对账断言（Σ链上托管余额 == 后端账本未结算额）测试化。
 - [~] 进行 I2：投影幂等与事件重放最终一致测试。
-  - [x] position 投影：invariants + idempotency 覆盖（sell 越额拒绝/round-trip 守恒/claim·refund 幂等与终态）— round 1，commit 774e1df，13/13 green。
-  - [ ] 残留：reserve/trade/claim 投影的幂等与"带 DB 的事件重放最终一致"测试（Prisma client 生成已解决=D2；带 DB 子集仍需测试 Postgres=D2b）。
+  - [x] position 投影（纯 reducer）：invariants + idempotency（sell 越额拒绝/round-trip 守恒/claim·refund 幂等与终态）— commit 774e1df。
+  - [x] position 投影（带 DB）：真实 Prisma upsert 路径的对账/事件重放幂等（持久化累加/round-trip 归零/越额拒绝不污染行/claim·refund replay 幂等）— commit 6369f19；DATABASE_URL 缺省自动 skip；region 7 全套 18/18 green（含 DB）。
+  - [ ] 残留：reserve/trade/claim 投影同款带 DB 测试（可复用本轮 Postgres 起法）。
+- [x] 完成 D2b：测试 Postgres 起法固化——`pg_createcluster 16 autoevo -p 55432` + `pg_ctlcluster start` + `prisma db push`；`DATABASE_URL=postgresql://xmarket:xmarket@127.0.0.1:55432/xmarket_test`。
 - ⚠ 上报项：事件→账本映射口径、`schema.prisma`。
 
 ## 4. 上报项（冻结面与跨层契约 · 不自动改，开 PR 候人工 review）
@@ -86,3 +88,4 @@
 ## 6. 巡次历史（追加式）
 - 2026-07 Sweep 0：Bootstrap 完成，计划与 config 落盘，cursor=0，未改业务代码。
 - 2026-07-02 round 1（region 7 indexer-reconciliation）：I2 position 投影 invariants/idempotency 测试（+8，13/13 green，test-only），commit 774e1df。大轮未满（仅覆盖 region 7），P7 跳过基线。新增决策 D2。
+- 2026-07-02 round 1b（region 7 续，决策 B）：D2/D2b 落地——Prisma 引擎经代理 generate（98fde7c）；起临时 Postgres 补带 DB 对账/幂等测试（+5，全套 18/18 green，DATABASE_URL 缺省 skip），commit 6369f19。仍单区，P7 跳过基线。
